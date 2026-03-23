@@ -1,0 +1,163 @@
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+
+<div class="alert alert-info" role="alert">
+    <span id="status-indicator" class="badge @(isConnected ? "bg-success" : "bg-danger")">
+        @(isConnected ? "🟢 Live" : "🔴 Offline")
+    </span>
+    <span class="ms-2">Real-time updates @(isConnected ? "connected" : "disconnected")</span>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title">Total Blocks</h5>
+                <h2>@stats.TotalBlocks</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title">Total Transactions</h5>
+                <h2>@stats.TotalTransactions</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5 class="card-title">Active Nodes</h5>
+                <h2>@stats.ActiveNodes</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <h5 class="card-title">Difficulty</h5>
+                <h2>@stats.Difficulty.ToString("F0")</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header bg-light">
+        <h5>Recent Events (Live)</h5>
+    </div>
+    <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+        @if (recentEvents.Count == 0)
+        {
+            <p class="text-muted">Waiting for events...</p>
+        }
+        else
+        {
+            <ul class="list-group list-group-flush">
+                @foreach (var evt in recentEvents.OrderByDescending(x => x.Timestamp).Take(10))
+                {
+                    <li class="list-group-item">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <strong>@evt.EventType</strong>
+                                <br />
+                                <small class="text-muted">@evt.Message</small>
+                            </div>
+                            <div class="text-end">
+                                <small>@evt.Timestamp.ToString("HH:mm:ss")</small>
+                            </div>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+</div>
+
+@code {
+    private HubConnection? hubConnection;
+    private bool isConnected = false;
+    private NetworkStatsDto stats = new(0, 0, 0, 0m, 0m, DateTime.UtcNow);
+    private List<BlockchainEventDto> recentEvents = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("http://localhost:5000/blockchain-hub", options =>
+            {
+                options.HttpMessageHandlerFactory = _ => new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
+            })
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<BlockchainEventDto>("BlockAdded", OnBlockAdded);
+        hubConnection.On<BlockchainEventDto>("TransactionConfirmed", OnTransactionConfirmed);
+        hubConnection.On<NetworkStatsDto>("NetworkStatsUpdated", OnNetworkStatsUpdated);
+
+        hubConnection.Closed += async (error) =>
+        {
+            isConnected = false;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(5000);
+            await hubConnection.StartAsync();
+        };
+
+        try
+        {
+            await hubConnection.StartAsync();
+            isConnected = true;
+            await hubConnection.SendAsync("SubscribeToUpdates");
+        }
+        catch (Exception ex)
+        {
+            // Handle connection failure gracefully
+            isConnected = false;
+        }
+    }
+
+    private void OnBlockAdded(BlockchainEventDto @event)
+    {
+        stats = stats with { TotalBlocks = stats.TotalBlocks + 1 };
+        recentEvents.Add(@event);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTransactionConfirmed(BlockchainEventDto @event)
+    {
+        stats = stats with { TotalTransactions = stats.TotalTransactions + 1 };
+        recentEvents.Add(@event);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnNetworkStatsUpdated(NetworkStatsDto newStats)
+    {
+        stats = newStats;
+        InvokeAsync(StateHasChanged);
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    public record BlockchainEventDto(
+        string EventType,
+        string? BlockHash,
+        int? TransactionCount,
+        DateTime Timestamp,
+        string? Message
+    );
+
+    public record NetworkStatsDto(
+        long TotalBlocks,
+        long TotalTransactions,
+        int ActiveNodes,
+        decimal NetworkHashRate,
+        decimal Difficulty,
+        DateTime UpdatedAt
+    );
+}

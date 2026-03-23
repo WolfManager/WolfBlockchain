@@ -1,0 +1,42 @@
+---
+# ConfigMap for Wolf Blockchain Application Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wolf-blockchain-config
+  namespace: wolf-blockchain
+  labels:
+    app: wolf-blockchain
+    component: configuration
+data:
+  ASPNETCORE_ENVIRONMENT: "Production"
+  ASPNETCORE_URLS: "http://+:5000"
+  WolfBlockchain__Environment: "Production"
+  WolfBlockchain__ApiUrl: "https://api.example.com"
+  WolfBlockchain__ApiVersion: "1.0.0"
+  WolfBlockchain__EnableMetrics: "true"
+  WolfBlockchain__EnableSwagger: "false"
+  WolfBlockchain__EnableHealthCheck: "true"
+  Database__AutoMigrate: "true"
+  Database__ConnectionTimeout: "30"
+  Database__CommandTimeout: "120"
+  Performance__EnableMetricsCollection: "true"
+  Performance__SlowRequestThresholdMs: "1000"
+  Performance__SlowQueryThresholdMs: "100"
+  Performance__MetricsRetentionDays: "30"
+  Monitoring__EnableHealthCheck: "true"
+  Monitoring__EnableDetailedErrors: "false"
+  Monitoring__LogSensitiveData: "false"
+  Security__SingleAdminMode: "true"
+  Security__OwnerAddress: "WOLFADMIN"
+  Security__EnableHttpsRedirect: "true"
+  Security__RequireHttps: "true"
+  Security__MaxFailedAttempts: "5"
+  Security__LoginLockoutMinutes: "30"
+  Security__BlockDurationMinutes: "15"
+  Security__SecretRotationIntervalHours: "24"
+  Jwt__ExpirationMinutes: "60"
+  Jwt__RefreshTokenExpirationDays: "7"
+  Logging__LogLevel__Default: "Information"
+  Logging__LogLevel__Microsoft_AspNetCore: "Warning"
+  Logging__LogLevel__Microsoft_EntityFrameworkCore: "Warning"

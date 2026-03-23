@@ -1,0 +1,373 @@
+@using System.Collections.Generic
+@using WolfBlockchain.API.Validation
+@implements IAsyncDisposable
+
+<div class="tab-pane fade show active">
+    <h3>💰 Token Management</h3>
+    
+    <!-- Toast Notifications -->
+    @if (!string.IsNullOrEmpty(notificationMessage))
+    {
+        <div class="alert alert-@notificationType alert-dismissible fade show" role="alert">
+            @notificationMessage
+            <button type="button" class="btn-close" @onclick="ClearNotification"></button>
+        </div>
+    }
+    
+    <div class="mb-4">
+        <button class="btn btn-primary" @onclick="ShowCreateTokenModal">➕ Create New Token</button>
+        <button class="btn btn-secondary" @onclick="RefreshTokens">🔄 Refresh</button>
+        <input type="text" class="form-control d-inline-block" style="width: 300px;" placeholder="Search tokens..." @bind="searchQuery">
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    }
+    else if (tokens.Count == 0)
+    {
+        <div class="alert alert-info">No tokens found</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Token ID</th>
+                        <th>Name</th>
+                        <th>Symbol</th>
+                        <th>Type</th>
+                        <th>Total Supply</th>
+                        <th>Current Supply</th>
+                        <th>Status</th>
+                        <th>Creator</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var token in tokens.Where(t => t.Symbol?.Contains(searchQuery ?? "") ?? false))
+                    {
+                        <tr>
+                            <td><code>@token.TokenId</code></td>
+                            <td>@token.Name</td>
+                            <td><strong>@token.Symbol</strong></td>
+                            <td><span class="badge bg-info">@token.TokenType</span></td>
+                            <td>@token.TotalSupply.ToString("N0")</td>
+                            <td>@token.CurrentSupply.ToString("N0")</td>
+                            <td><span class="badge bg-success">@token.Status</span></td>
+                            <td>@token.CreatorAddress</td>
+                            <td>
+                                <button class="btn btn-sm btn-info" @onclick="() => ShowTokenDetails(token)">Details</button>
+                                <button class="btn btn-sm btn-warning" @onclick="() => ShowMintModal(token)">Mint</button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => ShowBurnModal(token)">Burn</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <!-- Create Token Modal -->
+    @if (showCreateTokenModal)
+    {
+        <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create New Token</h5>
+                        <button type="button" class="btn-close" @onclick="CloseCreateTokenModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Token Name</label>
+                            <input type="text" class="form-control @(string.IsNullOrEmpty(tokenNameError) ? "" : "is-invalid")" placeholder="e.g., My Token" @bind="newToken.Name">
+                            @if (!string.IsNullOrEmpty(tokenNameError))
+                            {
+                                <div class="invalid-feedback">@tokenNameError</div>
+                            }
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Symbol</label>
+                            <input type="text" class="form-control @(string.IsNullOrEmpty(tokenSymbolError) ? "" : "is-invalid")" placeholder="e.g., MYT" @bind="newToken.Symbol">
+                            @if (!string.IsNullOrEmpty(tokenSymbolError))
+                            {
+                                <div class="invalid-feedback">@tokenSymbolError</div>
+                            }
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Initial Supply</label>
+                            <input type="number" class="form-control @(string.IsNullOrEmpty(initialSupplyError) ? "" : "is-invalid")" placeholder="1000000" @bind="newToken.InitialSupply">
+                            @if (!string.IsNullOrEmpty(initialSupplyError))
+                            {
+                                <div class="invalid-feedback">@initialSupplyError</div>
+                            }
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Max Supply</label>
+                            <input type="number" class="form-control @(string.IsNullOrEmpty(maxSupplyError) ? "" : "is-invalid")" placeholder="10000000" @bind="newToken.MaxSupply">
+                            @if (!string.IsNullOrEmpty(maxSupplyError))
+                            {
+                                <div class="invalid-feedback">@maxSupplyError</div>
+                            }
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseCreateTokenModal">Cancel</button>
+                        <button type="button" class="btn btn-primary" @onclick="CreateToken" disabled="@isCreating">
+                            @(isCreating ? "Creating..." : "Create Token")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Mint Modal -->
+    @if (showMintModal && selectedToken != null)
+    {
+        <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Mint @selectedToken.Symbol</h5>
+                        <button type="button" class="btn-close" @onclick="CloseMintModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Current Supply: @selectedToken.CurrentSupply.ToString("N0") / @selectedToken.TotalSupply.ToString("N0")</p>
+                        <div class="mb-3">
+                            <label class="form-label">Amount to Mint</label>
+                            <input type="number" class="form-control" placeholder="0" @bind="mintAmount">
+                        </div>
+                        <div class="alert alert-warning">
+                            ⚠️ This will increase supply. Ensure you have authorization.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseMintModal">Cancel</button>
+                        <button type="button" class="btn btn-warning" @onclick="MintToken">Mint</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Burn Modal -->
+    @if (showBurnModal && selectedToken != null)
+    {
+        <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Burn @selectedToken.Symbol</h5>
+                        <button type="button" class="btn-close" @onclick="CloseBurnModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Current Supply: @selectedToken.CurrentSupply.ToString("N0")</p>
+                        <div class="mb-3">
+                            <label class="form-label">Amount to Burn</label>
+                            <input type="number" class="form-control" placeholder="0" @bind="burnAmount">
+                        </div>
+                        <div class="alert alert-danger">
+                            ⚠️ This will permanently remove tokens from circulation.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseBurnModal">Cancel</button>
+                        <button type="button" class="btn btn-danger" @onclick="BurnToken">Burn</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<TokenData> tokens = new();
+    private string? searchQuery;
+    private bool isLoading;
+    private bool isCreating;
+    
+    private bool showCreateTokenModal;
+    private bool showMintModal;
+    private bool showBurnModal;
+    
+    private TokenData? selectedToken;
+    private CreateTokenModel newToken = new();
+    private long mintAmount;
+    private long burnAmount;
+    
+    // Validation errors
+    private string? tokenNameError;
+    private string? tokenSymbolError;
+    private string? initialSupplyError;
+    private string? maxSupplyError;
+    
+    // Notifications
+    private string? notificationMessage;
+    private string notificationType = "success";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshTokens();
+    }
+
+    private async Task RefreshTokens()
+    {
+        isLoading = true;
+        try
+        {
+            // Placeholder data
+            tokens = new List<TokenData>
+            {
+                new TokenData { TokenId = "TOKEN001", Name = "Wolf Coin", Symbol = "WOLF", TokenType = "Native", TotalSupply = 1000000000, CurrentSupply = 450000000, Status = "Active", CreatorAddress = "WOLFADMIN" },
+                new TokenData { TokenId = "TOKEN002", Name = "MemeCoin", Symbol = "MEM", TokenType = "Custom", TotalSupply = 5000000, CurrentSupply = 3200000, Status = "Active", CreatorAddress = "WOLFUSER1" },
+                new TokenData { TokenId = "TOKEN003", Name = "Token AI", Symbol = "AI", TokenType = "Custom", TotalSupply = 1000000000, CurrentSupply = 750000000, Status = "Active", CreatorAddress = "WOLFUSER2" },
+            };
+            ShowNotification("Tokens refreshed successfully", "success");
+        }
+        catch (Exception ex)
+        {
+            ShowNotification($"Error refreshing tokens: {ex.Message}", "danger");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowCreateTokenModal() => showCreateTokenModal = true;
+    private void CloseCreateTokenModal()
+    {
+        showCreateTokenModal = false;
+        ClearValidationErrors();
+    }
+
+    private async Task CreateToken()
+    {
+        // Validate inputs
+        var (nameValid, nameErr) = BlazorInputValidator.ValidateTokenName(newToken.Name);
+        tokenNameError = nameErr;
+
+        var (symbolValid, symbolErr) = BlazorInputValidator.ValidateTokenSymbol(newToken.Symbol);
+        tokenSymbolError = symbolErr;
+
+        var (initialValid, initialErr) = BlazorInputValidator.ValidateTokenSupply(newToken.InitialSupply);
+        initialSupplyError = initialErr;
+
+        var (maxValid, maxErr) = BlazorInputValidator.ValidateTokenSupply(newToken.MaxSupply);
+        maxSupplyError = maxErr;
+
+        if (!nameValid || !symbolValid || !initialValid || !maxValid)
+            return;
+
+        if (newToken.InitialSupply > newToken.MaxSupply)
+        {
+            initialSupplyError = "Initial supply cannot exceed max supply";
+            return;
+        }
+
+        isCreating = true;
+        try
+        {
+            // Call API to create token
+            tokens.Add(new TokenData
+            {
+                TokenId = $"TOKEN{Guid.NewGuid().ToString()[..6].ToUpper()}",
+                Name = newToken.Name,
+                Symbol = newToken.Symbol,
+                TokenType = "Custom",
+                TotalSupply = newToken.MaxSupply,
+                CurrentSupply = newToken.InitialSupply,
+                Status = "Active",
+                CreatorAddress = "WOLFUSER"
+            });
+
+            ShowNotification($"Token '{newToken.Name}' created successfully!", "success");
+            newToken = new();
+            CloseCreateTokenModal();
+        }
+        catch (Exception ex)
+        {
+            ShowNotification($"Error creating token: {ex.Message}", "danger");
+        }
+        finally
+        {
+            isCreating = false;
+        }
+    }
+
+    private void ClearValidationErrors()
+    {
+        tokenNameError = null;
+        tokenSymbolError = null;
+        initialSupplyError = null;
+        maxSupplyError = null;
+    }
+
+    private void ShowNotification(string message, string type)
+    {
+        notificationMessage = message;
+        notificationType = type;
+    }
+
+    private void ClearNotification()
+    {
+        notificationMessage = null;
+    }
+
+    private void ShowTokenDetails(TokenData token) => selectedToken = token;
+    private void ShowMintModal(TokenData token) { selectedToken = token; showMintModal = true; }
+    private void CloseMintModal() { showMintModal = false; mintAmount = 0; }
+
+    private async Task MintToken()
+    {
+        if (selectedToken != null && mintAmount > 0)
+        {
+            selectedToken.CurrentSupply += mintAmount;
+            ShowNotification($"Minted {mintAmount} tokens successfully!", "success");
+            CloseMintModal();
+        }
+    }
+
+    private void ShowBurnModal(TokenData token) { selectedToken = token; showBurnModal = true; }
+    private void CloseBurnModal() { showBurnModal = false; burnAmount = 0; }
+
+    private async Task BurnToken()
+    {
+        if (selectedToken != null && burnAmount > 0 && burnAmount <= selectedToken.CurrentSupply)
+        {
+            selectedToken.CurrentSupply -= burnAmount;
+            ShowNotification($"Burned {burnAmount} tokens successfully!", "success");
+            CloseBurnModal();
+        }
+    }
+
+    public class TokenData
+    {
+        public string TokenId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Symbol { get; set; } = string.Empty;
+        public string TokenType { get; set; } = "Custom";
+        public long TotalSupply { get; set; }
+        public long CurrentSupply { get; set; }
+        public string Status { get; set; } = "Active";
+        public string CreatorAddress { get; set; } = string.Empty;
+    }
+
+    public class CreateTokenModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Symbol { get; set; } = string.Empty;
+        public long InitialSupply { get; set; }
+        public long MaxSupply { get; set; }
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        await Task.CompletedTask;
+    }
+}

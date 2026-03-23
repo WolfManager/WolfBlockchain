@@ -1,0 +1,78 @@
+---
+# Service for SQL Server Database (Headless Service for StatefulSet)
+apiVersion: v1
+kind: Service
+metadata:
+  name: wolf-blockchain-db
+  namespace: wolf-blockchain
+  labels:
+    app: wolf-blockchain
+    component: database
+spec:
+  clusterIP: None
+  ports:
+  - port: 1433
+    targetPort: 1433
+    protocol: TCP
+    name: mssql
+  selector:
+    app: wolf-blockchain
+    component: database
+
+---
+# Service for Wolf Blockchain API (ClusterIP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: wolf-blockchain-api
+  namespace: wolf-blockchain
+  labels:
+    app: wolf-blockchain
+    component: api
+  annotations:
+    description: "ClusterIP service for Wolf Blockchain API"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5000
+    targetPort: 5000
+    protocol: TCP
+    name: http
+  - port: 5443
+    targetPort: 5443
+    protocol: TCP
+    name: https
+  selector:
+    app: wolf-blockchain
+    component: api
+
+---
+# Service for Wolf Blockchain API (LoadBalancer - for external access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: wolf-blockchain-api-lb
+  namespace: wolf-blockchain
+  labels:
+    app: wolf-blockchain
+    component: api
+  annotations:
+    description: "LoadBalancer service for Wolf Blockchain API external access"
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 5000
+    protocol: TCP
+    name: http
+  - port: 443
+    targetPort: 5443
+    protocol: TCP
+    name: https
+  selector:
+    app: wolf-blockchain
+    component: api
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800

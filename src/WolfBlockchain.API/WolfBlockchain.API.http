@@ -1,0 +1,6 @@
+@WolfBlockchain.API_HostAddress = http://localhost:5263
+
+GET {{WolfBlockchain.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

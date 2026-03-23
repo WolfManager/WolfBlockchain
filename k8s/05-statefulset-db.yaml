@@ -1,0 +1,83 @@
+---
+# StatefulSet for SQL Server Database
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: wolf-blockchain-db
+  namespace: wolf-blockchain
+  labels:
+    app: wolf-blockchain
+    component: database
+spec:
+  serviceName: wolf-blockchain-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wolf-blockchain
+      component: database
+  template:
+    metadata:
+      labels:
+        app: wolf-blockchain
+        component: database
+      annotations:
+        description: "SQL Server Database for Wolf Blockchain"
+    spec:
+      containers:
+      - name: mssql
+        image: mcr.microsoft.com/azure-sql-edge:latest
+        ports:
+        - containerPort: 1433
+          name: mssql
+        env:
+        - name: ACCEPT_EULA
+          value: "Y"
+        - name: MSSQL_SA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wolf-blockchain-secrets
+              key: SA_PASSWORD
+        - name: MSSQL_PID
+          value: "Developer"
+        - name: MSSQL_ENABLE_HADR
+          value: "0"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        volumeMounts:
+        - name: mssql-data
+          mountPath: /var/opt/mssql
+        livenessProbe:
+          tcpSocket:
+            port: mssql
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+        readinessProbe:
+          tcpSocket:
+            port: mssql
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+      volumes:
+      - name: mssql-data
+        persistentVolumeClaim:
+          claimName: wolf-blockchain-db-pvc
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - wolf-blockchain
+              topologyKey: kubernetes.io/hostname

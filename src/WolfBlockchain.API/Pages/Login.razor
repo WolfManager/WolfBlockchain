@@ -1,0 +1,92 @@
+@page "/login"
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ClientAuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Login - Wolf Blockchain</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-5">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h3 class="mb-3">Owner Login</h3>
+                    <p class="text-muted">Single-admin access only.</p>
+
+                    @if (!string.IsNullOrWhiteSpace(errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">@errorMessage</div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label">Address</label>
+                        <input class="form-control" @bind="address" autocomplete="username" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-control" @bind="password" autocomplete="current-password" />
+                    </div>
+
+                    <button class="btn btn-primary w-100" @onclick="LoginAsync" disabled="@isLoading">
+                        @(isLoading ? "Authenticating..." : "Login")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string address = string.Empty;
+    private string password = string.Empty;
+    private string? errorMessage;
+    private bool isLoading;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        if (!string.IsNullOrWhiteSpace(await AuthService.GetValidTokenAsync()))
+            Navigation.NavigateTo("/admin", true);
+    }
+
+    private async Task LoginAsync()
+    {
+        errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(address) || string.IsNullOrWhiteSpace(password))
+        {
+            errorMessage = "Address and password are required.";
+            return;
+        }
+
+        isLoading = true;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/security/login", new OwnerLoginRequest(address, password));
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage = "Authentication failed.";
+                return;
+            }
+
+            var payload = await response.Content.ReadFromJsonAsync<OwnerLoginResponse>();
+            if (payload is null || string.IsNullOrWhiteSpace(payload.AccessToken))
+            {
+                errorMessage = "Invalid authentication response.";
+                return;
+            }
+
+            await AuthService.SetTokenAsync(payload.AccessToken);
+            Navigation.NavigateTo("/admin", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

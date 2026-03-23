@@ -1,0 +1,167 @@
+# Build results
+bin/
+obj/
+out/
+*.dll
+*.exe
+*.pdb
+
+# Visual Studio
+.vs/
+.vscode/
+*.user
+*.sln.iml
+*.suo
+*.userprefs
+
+# Test results
+TestResults/
+*.trx
+coverage.cobertura.xml
+
+# Logs
+logs/
+*.log
+
+# Packages
+packages/
+.nuget/
+
+# Environment & Secrets
+.env
+.env.*.local
+.env.local
+appsettings.*.json
+appsettings.Production.json
+appsettings.Development.json
+appsettings.Staging.json
+
+# User Secrets
+*/Properties/launchSettings.json
+
+# Database files
+*.mdf
+*.ldf
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Node modules (if using npm)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Local development
+local/
+temp/
+tmp/
+
+# Kubernetes local configs
+kubeconfig*
+.kube/
+
+# Secrets & Keys
+*.key
+*.pem
+*.pfx
+*.p12
+secrets.json
+secrets.Development.json
+
+# Configuration
+.config/
+config.local.json
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Azure
+.azure/
+.azureignore
+
+# Terraform/Infrastructure
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Package manager locks (keep some for reproducibility)
+# Uncomment if you want to ignore lock files
+# package-lock.json
+# yarn.lock
+
+# Ignore everything in secrets directory
+/secrets/
+/Secrets/
+
+# AWS/Cloud credentials
+.aws/credentials
+.aws/config
+
+# SSH keys
+*.pem
+*.key
+~/.ssh/
+
+# Certificates
+*.crt
+*.cer
+*.p7b
+
+# Application Insights
+appsettings.*.json
+
+# CI/CD artifacts
+*.artifact
+artifacts/
+
+# Performance profiling
+*.nprof
+*.etl
+
+# Rider
+.idea/
+*.iml
+
+# Visual Studio Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Local overrides
+appsettings.local.json
+appsettings.local.Development.json
+appsettings.local.Staging.json
+appsettings.local.Production.json
+
+# Infrastructure
+terraform.tfvars
+terraform.tfvars.json
+kubeconfig.yaml
+kubeconfig-*.yaml
+
+# Sensitive files from K8s
+secret-backup-*.yaml

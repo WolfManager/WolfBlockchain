@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wolf Blockchain - Admin Dashboard</title>
+    <base href="/" />
+    <link rel="stylesheet" href="css/bootstrap.min.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+</head>
+<body>
+    <div id="app">
+        <svg class="loading-progress">
+            <circle r="40" cx="50" cy="50"></circle>
+        </svg>
+        <div class="loading-text">Loading...</div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
+    </div>
+
+    <script>
+        window.authStorage = {
+            getToken: () => localStorage.getItem("wolf_access_token"),
+            setToken: (value) => localStorage.setItem("wolf_access_token", value),
+            clearToken: () => localStorage.removeItem("wolf_access_token")
+        };
+    </script>
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>

@@ -1,0 +1,281 @@
+@using System.Collections.Generic
+@implements IAsyncDisposable
+
+<div class="tab-pane fade show active">
+    <h3>📋 Smart Contracts</h3>
+    
+    <div class="mb-4">
+        <button class="btn btn-primary" @onclick="ShowDeployModal">🚀 Deploy Contract</button>
+        <button class="btn btn-secondary" @onclick="RefreshContracts">🔄 Refresh</button>
+        <input type="text" class="form-control d-inline-block" style="width: 300px;" placeholder="Search contracts..." @bind="searchQuery">
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    }
+    else if (contracts.Count == 0)
+    {
+        <div class="alert alert-info">No smart contracts found</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Contract Address</th>
+                        <th>Name</th>
+                        <th>Version</th>
+                        <th>Status</th>
+                        <th>Creator</th>
+                        <th>Balance (WOLF)</th>
+                        <th>Deployed</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var contract in contracts.Where(c => c.Name?.Contains(searchQuery ?? "") ?? false))
+                    {
+                        <tr>
+                            <td><code>@contract.Address[..10]...</code></td>
+                            <td>@contract.Name</td>
+                            <td>@contract.Version</td>
+                            <td><span class="badge bg-success">@contract.Status</span></td>
+                            <td>@contract.Creator</td>
+                            <td>@contract.Balance.ToString("F2")</td>
+                            <td>@contract.DeployedAt.ToString("yyyy-MM-dd")</td>
+                            <td>
+                                <button class="btn btn-sm btn-info" @onclick="() => ShowContractDetails(contract)">View</button>
+                                <button class="btn btn-sm btn-primary" @onclick="() => ShowInteractModal(contract)">Interact</button>
+                                <button class="btn btn-sm btn-warning" @onclick="() => ShowUpgradeModal(contract)">Upgrade</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <!-- Deploy Modal -->
+    @if (showDeployModal)
+    {
+        <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Deploy Smart Contract</h5>
+                        <button type="button" class="btn-close" @onclick="CloseDeployModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Contract Name</label>
+                            <input type="text" class="form-control" placeholder="e.g., MyToken" @bind="newContract.Name">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Contract Code (Solidity/Rust)</label>
+                            <textarea class="form-control" rows="10" placeholder="Paste contract code here..." @bind="newContract.Code"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Initial Balance (WOLF)</label>
+                            <input type="number" class="form-control" placeholder="0" @bind="newContract.InitialBalance">
+                        </div>
+                        <div class="alert alert-info">
+                            📝 Contract will be compiled and deployed to the blockchain.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseDeployModal">Cancel</button>
+                        <button type="button" class="btn btn-primary" @onclick="DeployContract">Deploy</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Interact Modal -->
+    @if (showInteractModal && selectedContract != null)
+    {
+        <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Interact with @selectedContract.Name</h5>
+                        <button type="button" class="btn-close" @onclick="CloseInteractModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Function Name</label>
+                            <input type="text" class="form-control" placeholder="e.g., transfer" @bind="functionName">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Parameters (JSON)</label>
+                            <textarea class="form-control" rows="5" placeholder='{"to": "0x...", "amount": 100}' @bind="functionParams"></textarea>
+                        </div>
+                        <div class="alert alert-warning">
+                            ⚠️ This will execute a transaction on the blockchain.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseInteractModal">Cancel</button>
+                        <button type="button" class="btn btn-primary" @onclick="CallFunction">Execute</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Contract Details -->
+    @if (selectedContract != null && !showInteractModal && !showDeployModal)
+    {
+        <div class="card mt-4">
+            <div class="card-header bg-light">
+                <h5>Contract Details: @selectedContract.Name</h5>
+                <button class="btn btn-sm btn-secondary float-end" @onclick="ClearSelection">Close</button>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Address:</strong> <code>@selectedContract.Address</code></p>
+                        <p><strong>Version:</strong> @selectedContract.Version</p>
+                        <p><strong>Creator:</strong> @selectedContract.Creator</p>
+                        <p><strong>Status:</strong> <span class="badge bg-success">@selectedContract.Status</span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Balance:</strong> @selectedContract.Balance.ToString("F2") WOLF</p>
+                        <p><strong>Deployed:</strong> @selectedContract.DeployedAt</p>
+                        <p><strong>Gas Used:</strong> @selectedContract.GasUsed</p>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <h6>Contract Code Preview</h6>
+                    <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px;">@(selectedContract.Code[..Math.Min(500, selectedContract.Code.Length)])...</pre>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ContractData> contracts = new();
+    private string? searchQuery;
+    private bool isLoading;
+    
+    private bool showDeployModal;
+    private bool showInteractModal;
+    
+    private ContractData? selectedContract;
+    private CreateContractModel newContract = new();
+    private string functionName = string.Empty;
+    private string functionParams = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshContracts();
+    }
+
+    private async Task RefreshContracts()
+    {
+        isLoading = true;
+        try
+        {
+            // Placeholder data
+            contracts = new List<ContractData>
+            {
+                new ContractData 
+                { 
+                    Address = "0x1234567890abcdef1234567890abcdef12345678", 
+                    Name = "TokenVault", 
+                    Version = "1.0.0", 
+                    Status = "Active", 
+                    Creator = "WOLFADMIN",
+                    Balance = 10000,
+                    DeployedAt = DateTime.UtcNow.AddDays(-30),
+                    GasUsed = 850000,
+                    Code = "pragma solidity ^0.8.0; contract TokenVault { ... }"
+                },
+                new ContractData 
+                { 
+                    Address = "0xabcdef1234567890abcdef1234567890abcdef12", 
+                    Name = "StakingPool", 
+                    Version = "2.1.0", 
+                    Status = "Active", 
+                    Creator = "WOLFUSER1",
+                    Balance = 50000,
+                    DeployedAt = DateTime.UtcNow.AddDays(-15),
+                    GasUsed = 1250000,
+                    Code = "pragma solidity ^0.8.0; contract StakingPool { ... }"
+                },
+            };
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowDeployModal() => showDeployModal = true;
+    private void CloseDeployModal() { showDeployModal = false; newContract = new(); }
+
+    private async Task DeployContract()
+    {
+        if (string.IsNullOrWhiteSpace(newContract.Name) || string.IsNullOrWhiteSpace(newContract.Code))
+            return;
+
+        contracts.Add(new ContractData
+        {
+            Address = $"0x{Guid.NewGuid().ToString()[..40]}",
+            Name = newContract.Name,
+            Version = "1.0.0",
+            Status = "Active",
+            Creator = "WOLFUSER",
+            Balance = newContract.InitialBalance,
+            DeployedAt = DateTime.UtcNow,
+            GasUsed = 900000,
+            Code = newContract.Code
+        });
+
+        CloseDeployModal();
+    }
+
+    private void ShowContractDetails(ContractData contract) => selectedContract = contract;
+    private void ClearSelection() => selectedContract = null;
+
+    private void ShowInteractModal(ContractData contract) { selectedContract = contract; showInteractModal = true; }
+    private void CloseInteractModal() { showInteractModal = false; functionName = string.Empty; functionParams = string.Empty; }
+
+    private async Task CallFunction()
+    {
+        // Call contract function
+        CloseInteractModal();
+    }
+
+    private void ShowUpgradeModal(ContractData contract) => selectedContract = contract;
+
+    public class ContractData
+    {
+        public string Address { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Version { get; set; } = "1.0.0";
+        public string Status { get; set; } = "Active";
+        public string Creator { get; set; } = string.Empty;
+        public decimal Balance { get; set; }
+        public DateTime DeployedAt { get; set; }
+        public long GasUsed { get; set; }
+        public string Code { get; set; } = string.Empty;
+    }
+
+    public class CreateContractModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Code { get; set; } = string.Empty;
+        public decimal InitialBalance { get; set; }
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        await Task.CompletedTask;
+    }
+}

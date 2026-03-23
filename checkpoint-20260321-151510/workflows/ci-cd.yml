@@ -1,0 +1,54 @@
+# ============================================
+# 🐺 WOLF BLOCKCHAIN - CI/CD PIPELINE
+# ============================================
+# Automated Build, Test, Docker Build & Deploy
+# Includes security scanning and secret management
+
+name: WolfBlockchain CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-test-analyze:
+    name: Build, Analyze, Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore WolfBlockchain.sln
+
+      - name: Build (warnings policy from Directory.Build.props)
+        run: dotnet build WolfBlockchain.sln --configuration Release --no-restore -warnaserror
+
+      - name: Verify formatting
+        run: dotnet format WolfBlockchain.sln --verify-no-changes --no-restore
+
+      - name: Test
+        run: dotnet test WolfBlockchain.sln --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/**/*.trx'
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: '**/TestResults/**/coverage.cobertura.xml'

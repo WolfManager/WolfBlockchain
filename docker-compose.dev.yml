@@ -1,0 +1,37 @@
+# ============================================
+# 🐺 WOLF BLOCKCHAIN - DOCKER COMPOSE DEV
+# ============================================
+# Development environment with hot reload
+# Extends docker-compose.yml
+
+version: '3.8'
+
+services:
+  # ============= API - DEVELOPMENT OVERRIDES =============
+  api:
+    build:
+      target: build  # Use build stage for development
+    volumes:
+      - ./src:/src:cached  # Mount source for hot reload
+      - ./logs:/app/logs:delegated  # Mount logs directory
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - DOTNET_USE_POLLING_FILE_WATCHER=true
+      - ASPNETCORE_URLS=http://+:5000
+    ports:
+      - "5000:5000"
+      - "5001:5443"  # HTTPS for dev
+    command: dotnet watch run --project /src/src/WolfBlockchain.API/WolfBlockchain.API.csproj
+
+  # ============= DATABASE - DEVELOPMENT =============
+  db:
+    environment:
+      - MSSQL_PID=Developer
+    volumes:
+      - wolf-sqldata-dev:/var/opt/mssql
+
+# ============= VOLUMES - DEVELOPMENT =============
+volumes:
+  wolf-sqldata-dev:
+    driver: local
+    name: wolf-blockchain-sqldata-dev

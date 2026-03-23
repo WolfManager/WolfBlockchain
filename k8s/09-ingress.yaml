@@ -1,0 +1,98 @@
+---
+# Ingress for Wolf Blockchain API
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wolf-blockchain-ingress
+  namespace: wolf-blockchain
+  labels:
+    app: wolf-blockchain
+  annotations:
+    cert-manager.io/cluster-issuer: "selfsigned"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - wolf-blockchain.local
+    secretName: wolf-blockchain-tls
+  rules:
+  - host: wolf-blockchain.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: wolf-blockchain-api
+            port:
+              number: 5000
+      - path: /health
+        pathType: Exact
+        backend:
+          service:
+            name: wolf-blockchain-api
+            port:
+              number: 5000
+      - path: /swagger
+        pathType: Prefix
+        backend:
+          service:
+            name: wolf-blockchain-api
+            port:
+              number: 5000
+
+---
+# NetworkPolicy for Wolf Blockchain
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wolf-blockchain-network-policy
+  namespace: wolf-blockchain
+  labels:
+    app: wolf-blockchain
+spec:
+  podSelector:
+    matchLabels:
+      app: wolf-blockchain
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+    - podSelector:
+        matchLabels:
+          app: wolf-blockchain
+    ports:
+    - protocol: TCP
+      port: 5000
+    - protocol: TCP
+      port: 5443
+    - protocol: TCP
+      port: 1433
+  
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: wolf-blockchain
+    ports:
+    - protocol: TCP
+      port: 5000
+    - protocol: TCP
+      port: 5443
+    - protocol: TCP
+      port: 1433
+  
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53

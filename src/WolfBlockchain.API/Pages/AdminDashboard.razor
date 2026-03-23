@@ -1,0 +1,178 @@
+@page "/admin"
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Headers
+@attribute [Authorize]
+@using WolfBlockchain.Core
+@inject HttpClient Http
+@inject ClientAuthService AuthService
+@inject NavigationManager Navigation
+
+<div class="container-fluid mt-4">
+    <h1 class="mb-4">⚙️ Wolf Blockchain Admin Dashboard</h1>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Users</h5>
+                    <h2>@totalUsers</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Tokens</h5>
+                    <h2>@totalTokens</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">AI Training Jobs</h5>
+                    <h2>@aiTrainingJobs</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <h5 class="card-title">Smart Contracts</h5>
+                    <h2>@smartContracts</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link @(activeTab == "overview" ? "active" : "")" 
+               @onclick="() => SetTab("overview")" role="tab">
+                📊 Overview
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(activeTab == "users" ? "active" : "")" 
+               @onclick="() => SetTab("users")" role="tab">
+                👥 Users
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(activeTab == "tokens" ? "active" : "")" 
+               @onclick="() => SetTab("tokens")" role="tab">
+                💰 Tokens
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(activeTab == "ai" ? "active" : "")" 
+               @onclick="() => SetTab("ai")" role="tab">
+                🤖 AI Training
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(activeTab == "contracts" ? "active" : "")" 
+               @onclick="() => SetTab("contracts")" role="tab">
+                📋 Smart Contracts
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(activeTab == "blockchain" ? "active" : "")" 
+               @onclick="() => SetTab("blockchain")" role="tab">
+                ⛓️ Blockchain
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+        @if (activeTab == "overview")
+        {
+            <OverviewTab />
+        }
+        @if (activeTab == "users")
+        {
+            <UsersTab />
+        }
+        @if (activeTab == "tokens")
+        {
+            <TokensTab />
+        }
+        @if (activeTab == "ai")
+        {
+            <AITrainingTab />
+        }
+        @if (activeTab == "contracts")
+        {
+            <SmartContractsTab />
+        }
+        @if (activeTab == "blockchain")
+        {
+            <BlockchainTab />
+        }
+    </div>
+</div>
+
+@code {
+    private string activeTab = "overview";
+    private int totalUsers;
+    private int totalTokens;
+    private int aiTrainingJobs;
+    private int smartContracts;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        var token = await AuthService.GetValidTokenAsync();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            Navigation.NavigateTo("/login", true);
+            return;
+        }
+
+        Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        LoadStatistics();
+        StateHasChanged();
+    }
+
+    private void LoadStatistics()
+    {
+        totalUsers = 150;
+        totalTokens = 8;
+        aiTrainingJobs = 42;
+        smartContracts = 25;
+    }
+
+    private void SetTab(string tab)
+    {
+        activeTab = tab;
+    }
+}
+
+<style>
+    .card {
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+    }
+    
+    .card:hover {
+        transform: translateY(-5px);
+    }
+
+    .nav-link {
+        cursor: pointer;
+        color: #666;
+        border: none;
+        background: none;
+    }
+
+    .nav-link.active {
+        color: #007bff;
+        border-bottom: 3px solid #007bff;
+    }
+</style>

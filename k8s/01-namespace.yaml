@@ -1,0 +1,11 @@
+---
+# Kubernetes Namespace for Wolf Blockchain
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wolf-blockchain
+  labels:
+    name: wolf-blockchain
+    environment: production
+  annotations:
+    description: "Wolf Blockchain Production Namespace"

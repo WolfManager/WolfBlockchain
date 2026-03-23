@@ -1,0 +1,35 @@
+---
+# Persistent Volume Claim for SQL Server Database
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wolf-blockchain-db-pvc
+  namespace: wolf-blockchain
+  labels:
+    app: wolf-blockchain
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: hostpath
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+# Persistent Volume Claim for Application Logs
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wolf-blockchain-logs-pvc
+  namespace: wolf-blockchain
+  labels:
+    app: wolf-blockchain
+    component: logging
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: hostpath
+  resources:
+    requests:
+      storage: 20Gi
