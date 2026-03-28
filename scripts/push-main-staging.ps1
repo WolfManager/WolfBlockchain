@@ -8,9 +8,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Write-Info($m) { Write-Host "ℹ️  $m" -ForegroundColor Cyan }
-function Write-Ok($m) { Write-Host "✅ $m" -ForegroundColor Green }
-function Write-Warn($m) { Write-Host "⚠️  $m" -ForegroundColor Yellow }
+function Write-Info($m) { Write-Host "[INFO] $m" -ForegroundColor Cyan }
+function Write-Ok($m) { Write-Host "[OK] $m" -ForegroundColor Green }
+function Write-Warn($m) { Write-Host "[WARN] $m" -ForegroundColor Yellow }
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path (Join-Path $scriptRoot "..")
@@ -36,7 +36,7 @@ try {
     $existingRemote = git remote get-url origin 2>$null
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($existingRemote)) {
         if ([string]::IsNullOrWhiteSpace($RemoteUrl)) {
-            throw "Remote 'origin' is not configured. Provide -RemoteUrl <repo-url>."
+            throw "Remote 'origin' is not configured. Provide -RemoteUrl [repo-url]."
         }
 
         git remote add origin $RemoteUrl
