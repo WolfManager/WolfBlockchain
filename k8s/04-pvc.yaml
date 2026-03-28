@@ -33,3 +33,21 @@ spec:
   resources:
     requests:
       storage: 20Gi
+
+---
+# Persistent Volume Claim for API data (wallet/blockchain file storage)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wolf-blockchain-api-data-pvc
+  namespace: wolf-blockchain
+  labels:
+    app: wolf-blockchain
+    component: api-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: hostpath
+  resources:
+    requests:
+      storage: 20Gi

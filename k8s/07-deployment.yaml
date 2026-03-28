@@ -24,7 +24,7 @@ spec:
       labels:
         app: wolf-blockchain
         component: api
-        version: "2.0.0"
+        version: "2.0.1-rc1"
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "5000"
@@ -38,8 +38,8 @@ spec:
       
       containers:
       - name: api
-        image: wolfblockchain:v2.0.0
-        imagePullPolicy: Always
+        image: wolfblockchain:v2.0.1-rc1
+        imagePullPolicy: IfNotPresent
         
         ports:
         - name: http
@@ -113,6 +113,8 @@ spec:
         volumeMounts:
         - name: logs
           mountPath: /app/logs
+        - name: data
+          mountPath: /app/data
         - name: tmp
           mountPath: /tmp
       
@@ -121,6 +123,9 @@ spec:
       - name: logs
         persistentVolumeClaim:
           claimName: wolf-blockchain-logs-pvc
+      - name: data
+        persistentVolumeClaim:
+          claimName: wolf-blockchain-api-data-pvc
       - name: tmp
         emptyDir: {}
       
