@@ -40,3 +40,23 @@ data:
   Logging__LogLevel__Default: "Information"
   Logging__LogLevel__Microsoft_AspNetCore: "Warning"
   Logging__LogLevel__Microsoft_EntityFrameworkCore: "Warning"
+
+  # Blockchain/RPC environment
+  Blockchain__Network: "staging"
+  Blockchain__RpcUrl: "https://rpc.your-network.tld"
+  Blockchain__RpcTimeoutSeconds: "30"
+
+  # Wallet environment (non-secret values only)
+  Wallet__KeystorePath: "/app/secrets/wallet"
+  Wallet__DefaultAddress: ""
+
+  # AI service environment (non-secret values only)
+  AI__Provider: "openai"
+  AI__Endpoint: "https://api.openai.com/v1"
+  AI__Model: "gpt-4o-mini"
+
+  # Cache / queue endpoints (non-secret values only)
+  Cache__RedisHost: "redis"
+  Cache__RedisPort: "6379"
+  Queue__Provider: "none"
+  Queue__Host: ""
