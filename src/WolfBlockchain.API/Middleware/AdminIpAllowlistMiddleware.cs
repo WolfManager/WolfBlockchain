@@ -97,6 +97,7 @@ public class AdminIpAllowlistMiddleware
     private static bool IsInfrastructureBypassPath(string path)
     {
         return path.Equals("/health", StringComparison.OrdinalIgnoreCase)
+               || path.Equals("/ready", StringComparison.OrdinalIgnoreCase)
                || path.Equals("/metrics", StringComparison.OrdinalIgnoreCase);
     }
 

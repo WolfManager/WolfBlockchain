@@ -31,34 +31,63 @@ spec:
         prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: wolf-blockchain-api
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
-      
+        runAsUser: 10001
+        fsGroup: 10001
+
       containers:
       - name: api
         image: wolfblockchain:v2.0.1-rc2
         imagePullPolicy: IfNotPresent
-        
+
         ports:
         - name: http
           containerPort: 5000
           protocol: TCP
-        
+
         env:
         - name: ASPNETCORE_ENVIRONMENT
           value: "Production"
         - name: ASPNETCORE_URLS
           value: "http://+:5000"
-        
-        # Load configuration from ConfigMap
+        - name: ConnectionStrings__DefaultConnection
+          valueFrom:
+            secretKeyRef:
+              name: wolf-blockchain-secrets
+              key: ConnectionStrings__DefaultConnection
+        - name: Jwt__Secret
+          valueFrom:
+            secretKeyRef:
+              name: wolf-blockchain-secrets
+              key: JWT_SECRET
+        - name: Security__BootstrapToken
+          valueFrom:
+            secretKeyRef:
+              name: wolf-blockchain-secrets
+              key: Security__BootstrapToken
+        - name: RPC_PRIMARY
+          valueFrom:
+            secretKeyRef:
+              name: wolf-blockchain-secrets
+              key: RPC_PRIMARY
+        - name: RPC_FALLBACK
+          valueFrom:
+            secretKeyRef:
+              name: wolf-blockchain-secrets
+              key: RPC_FALLBACK
+        - name: RPC_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: wolf-blockchain-secrets
+              key: RPC_AUTH_TOKEN
+
+        # Load non-sensitive configuration from ConfigMap
         envFrom:
         - configMapRef:
             name: wolf-blockchain-config
-        - secretRef:
-            name: wolf-blockchain-secrets
-        
+
         # Resource requests and limits
         resources:
           requests:
@@ -67,7 +96,7 @@ spec:
           limits:
             memory: "768Mi"
             cpu: "500m"
-        
+
         # Health checks
         livenessProbe:
           httpGet:
@@ -78,17 +107,17 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
-        
+
         readinessProbe:
           httpGet:
-            path: /health
+            path: /ready
             port: http
             scheme: HTTP
           initialDelaySeconds: 10
           periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 2
-        
+          timeoutSeconds: 2
+          failureThreshold: 3
+
         startupProbe:
           httpGet:
             path: /health
@@ -98,17 +127,17 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 30
-        
+
         # Security context for container
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
           runAsNonRoot: true
-          runAsUser: 1000
+          runAsUser: 10001
           capabilities:
             drop:
             - ALL
-        
+
         # Volume mounts
         volumeMounts:
         - name: logs
@@ -117,7 +146,7 @@ spec:
           mountPath: /app/data
         - name: tmp
           mountPath: /tmp
-      
+
       # Volumes
       volumes:
       - name: logs
@@ -128,7 +157,7 @@ spec:
           claimName: wolf-blockchain-api-data-pvc
       - name: tmp
         emptyDir: {}
-      
+
       # Node affinity - prefer nodes with more resources
       affinity:
         podAntiAffinity:

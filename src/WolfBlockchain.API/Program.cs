@@ -144,6 +144,18 @@ builder.Services.AddScoped<ClientAuthService>();
 builder.Services.AddScoped<RealtimeUpdateService>();
 builder.Services.AddScoped<AdminDashboardCacheService>();
 
+builder.Services.Configure<RpcFailoverOptions>(options =>
+{
+    options.PrimaryEndpoint = builder.Configuration["RPC_PRIMARY"] ?? builder.Configuration["Blockchain:RpcPrimary"];
+    options.FallbackEndpoint = builder.Configuration["RPC_FALLBACK"] ?? builder.Configuration["Blockchain:RpcFallback"];
+    options.AuthToken = builder.Configuration["RPC_AUTH_TOKEN"];
+    options.TimeoutSeconds = builder.Configuration.GetValue<int>("Blockchain:RpcTimeoutSeconds", 5);
+    options.RetryCount = builder.Configuration.GetValue<int>("Blockchain:RpcRetryCount", 2);
+    options.BackoffMs = builder.Configuration.GetValue<int>("Blockchain:RpcBackoffMs", 250);
+});
+
+builder.Services.AddHttpClient<IRpcFailoverService, RpcFailoverService>();
+
 builder.Services.AddSingleton<IPerformanceMetrics, WolfBlockchain.API.Monitoring.PerformanceMetrics>();
 builder.Services.AddSingleton<ISecretRotationService, SecretRotationService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ISecretRotationService>() as SecretRotationService ?? throw new InvalidOperationException());
@@ -219,6 +231,43 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapHealthChecks("/health").AllowAnonymous();
+app.MapGet("/ready", async (IConfiguration configuration, IRpcFailoverService rpcFailoverService, CancellationToken ct) =>
+{
+    var jwtConfigured = !string.IsNullOrWhiteSpace(configuration["Jwt:Secret"]);
+    var connectionStringConfigured = !string.IsNullOrWhiteSpace(configuration.GetConnectionString("DefaultConnection"));
+
+    var dataDirectory = Environment.GetEnvironmentVariable("WOLF_DATA_PATH") ?? "/app/data";
+    var storageReady = false;
+    try
+    {
+        Directory.CreateDirectory(dataDirectory);
+        var probePath = Path.Combine(dataDirectory, ".ready-probe");
+        await File.WriteAllTextAsync(probePath, DateTime.UtcNow.ToString("O"), ct);
+        File.Delete(probePath);
+        storageReady = true;
+    }
+    catch (IOException)
+    {
+        storageReady = false;
+    }
+    catch (UnauthorizedAccessException)
+    {
+        storageReady = false;
+    }
+
+    var rpc = await rpcFailoverService.ProbeAsync(ct);
+
+    var isReady = jwtConfigured && connectionStringConfigured && storageReady && rpc.IsHealthy;
+
+    return isReady
+        ? Results.Ok(new
+        {
+            status = "ready",
+            rpc = new { healthy = true, activeHost = rpc.ActiveEndpointHost, fallback = rpc.UsedFallback },
+            storage = "ok"
+        })
+        : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+}).AllowAnonymous();
 app.MapGet("/metrics", (IPerformanceMetrics performanceMetrics) =>
 {
     var stats = performanceMetrics.GetStatistics();
@@ -264,9 +313,7 @@ using (var scope = app.Services.CreateScope())
 Log.Information("========================================");
 Log.Information("  🐺 WOLF BLOCKCHAIN API - SINGLE ADMIN MODE");
 Log.Information("  Security: JWT + HTTPS + Headers + IP Allowlist + Login Lockout");
-Log.Information("  Running on: http://localhost:5000");
-Log.Information("  Swagger: http://localhost:5000/swagger");
-Log.Information("  Health: http://localhost:5000/health");
+Log.Information("  Service started. Health endpoints: /health, /ready");
 Log.Information("  SignalR Real-time Hub: /blockchain-hub");
 Log.Information("========================================");
 

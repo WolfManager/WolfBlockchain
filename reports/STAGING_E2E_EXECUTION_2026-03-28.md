@@ -114,3 +114,40 @@ With 3 replicas, owner/user state is in-memory/static per pod, so auth/bootstrap
   - identical SHA-256 hash across all pods
 
 Result: auth state is now consistent across replicas in staging after the persistence + reload change.
+
+## 12) Hardening rollout: secrets + probes + readiness unblock
+
+- Sensitive config handling hardened:
+  - removed sensitive RPC and key-patterned values from ConfigMap
+  - mapped sensitive values via `secretKeyRef` in deployment env
+  - removed `secretRef` from `envFrom` to avoid broad implicit secret import
+- Security context hardened in deployment:
+  - `automountServiceAccountToken: false`
+  - non-root runtime user/group set to `10001`
+  - `readOnlyRootFilesystem: true` preserved with write access limited to mounted volumes (`/app/data`, `/app/logs`, `/tmp`)
+- Added dedicated readiness path `/ready` and switched `readinessProbe` to it.
+- Rollout blocker fixed:
+  - added explicit bypass for `/ready` in `AdminIpAllowlistMiddleware`
+  - added explicit bypass for `/ready` in `RateLimitingMiddleware`
+  - rollout now completes cleanly (`READY=3`, `UPDATED=3`, `REPLICAS=3`)
+
+## 13) Validation summary after hardening changes
+
+- Staging rollout status: PASS
+- Staging validation script: PASS
+- `/health`: 200
+- `/ready`: 200
+- `/metrics`: 200
+- Pod readiness: 3/3 ready, no blocked NotReady pod after middleware bypass fix
+- Build: PASS
+- Tests (non-integration/non-performance): PASS (`156/156`)
+
+## 14) Manual production-only actions (must be executed outside repo)
+
+1. Replace all `__SET_IN_CLUSTER_ONLY__` placeholder values in `wolf-blockchain-secrets` with real secrets.
+2. Set real RPC endpoints:
+   - `RPC_PRIMARY`
+   - `RPC_FALLBACK`
+   - optional `RPC_AUTH_TOKEN` (if upstream requires auth)
+3. Verify no secret values are printed in logs during startup and failover events.
+4. Re-run production go-live checklist before promotion.

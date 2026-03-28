@@ -41,10 +41,11 @@ data:
   Logging__LogLevel__Microsoft_AspNetCore: "Warning"
   Logging__LogLevel__Microsoft_EntityFrameworkCore: "Warning"
 
-  # Blockchain/RPC environment
+  # Blockchain/RPC non-sensitive settings
   Blockchain__Network: "staging"
-  Blockchain__RpcUrl: "https://rpc.your-network.tld"
-  Blockchain__RpcTimeoutSeconds: "30"
+  Blockchain__RpcTimeoutSeconds: "5"
+  Blockchain__RpcRetryCount: "2"
+  Blockchain__RpcBackoffMs: "250"
 
   # Wallet environment (non-secret values only)
   Wallet__KeystorePath: "/app/secrets/wallet"

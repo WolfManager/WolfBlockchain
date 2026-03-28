@@ -50,6 +50,7 @@ public class RateLimitingMiddleware
     private static bool IsBypassedPath(PathString path)
     {
         return path.Equals("/health", StringComparison.OrdinalIgnoreCase)
+               || path.Equals("/ready", StringComparison.OrdinalIgnoreCase)
                || path.Equals("/metrics", StringComparison.OrdinalIgnoreCase);
     }
 
