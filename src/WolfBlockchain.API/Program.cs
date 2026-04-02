@@ -255,7 +255,17 @@ app.MapGet("/ready", async (IConfiguration configuration, IRpcFailoverService rp
         storageReady = false;
     }
 
-    var rpc = await rpcFailoverService.ProbeAsync(ct);
+    RpcProbeResult rpc;
+    try
+    {
+        using var rpcTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        rpcTimeoutCts.CancelAfter(TimeSpan.FromSeconds(1));
+        rpc = await rpcFailoverService.ProbeAsync(rpcTimeoutCts.Token);
+    }
+    catch (OperationCanceledException)
+    {
+        rpc = new RpcProbeResult(false, null, false, "RPC probe timed out.");
+    }
 
     var isReady = jwtConfigured && connectionStringConfigured && storageReady && rpc.IsHealthy;
 

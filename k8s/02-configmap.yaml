@@ -43,9 +43,9 @@ data:
 
   # Blockchain/RPC non-sensitive settings
   Blockchain__Network: "staging"
-  Blockchain__RpcTimeoutSeconds: "5"
-  Blockchain__RpcRetryCount: "2"
-  Blockchain__RpcBackoffMs: "250"
+  Blockchain__RpcTimeoutSeconds: "1"
+  Blockchain__RpcRetryCount: "0"
+  Blockchain__RpcBackoffMs: "100"
 
   # Wallet environment (non-secret values only)
   Wallet__KeystorePath: "/app/secrets/wallet"
