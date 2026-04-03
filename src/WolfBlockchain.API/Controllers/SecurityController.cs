@@ -34,6 +34,12 @@ public class SecurityController : ControllerBase
     private int MaxFailedLoginAttempts => _configuration.GetValue<int>("Security:MaxFailedLoginAttempts", 5);
     private int LoginLockoutMinutes => _configuration.GetValue<int>("Security:LoginLockoutMinutes", 30);
 
+    /// <summary>Strips newlines and control characters to prevent log-injection attacks.</summary>
+    private static string SanitizeForLog(string? value)
+        => string.IsNullOrEmpty(value)
+            ? string.Empty
+            : System.Text.RegularExpressions.Regex.Replace(value, @"[\r\n\t\x00-\x1f\x7f]", "_");
+
     /// <summary>
     /// Inregistrarea publică este dezactivată în single-admin mode.
     /// </summary>
@@ -90,9 +96,9 @@ public class SecurityController : ControllerBase
         if (owner == null)
             return Conflict("Owner already initialized.");
 
-        _logger.LogInformation("Owner bootstrap completed for address: {OwnerAddress}", request.Address);
+        _logger.LogInformation("Owner bootstrap completed for address: {OwnerAddress}", SanitizeForLog(request.Address));
         Log.ForContext("AuditType", "Security")
-           .Information("SECURITY_AUDIT OwnerBootstrap Success Address={Address}", request.Address);
+           .Information("SECURITY_AUDIT OwnerBootstrap Success Address={Address}", SanitizeForLog(request.Address));
 
         return Ok(new
         {
@@ -119,14 +125,14 @@ public class SecurityController : ControllerBase
             if (!string.Equals(request.Address, OwnerAddress, StringComparison.Ordinal))
             {
                 Log.ForContext("AuditType", "Security")
-                   .Warning("SECURITY_AUDIT LoginDenied NonOwnerAddress={Address}", request.Address);
+                   .Warning("SECURITY_AUDIT LoginDenied NonOwnerAddress={Address}", SanitizeForLog(request.Address));
                 return Unauthorized("Invalid credentials");
             }
 
             if (_userManagerService.IsLoginLocked(out var lockedUntil))
             {
                 Log.ForContext("AuditType", "Security")
-                   .Warning("SECURITY_AUDIT LoginLocked Address={Address} LockedUntil={LockedUntil}", request.Address, lockedUntil!.Value);
+                   .Warning("SECURITY_AUDIT LoginLocked Address={Address} LockedUntil={LockedUntil}", SanitizeForLog(request.Address), lockedUntil!.Value);
 
                 return StatusCode(StatusCodes.Status423Locked, new
                 {
@@ -145,13 +151,13 @@ public class SecurityController : ControllerBase
                 _userManagerService.RecordFailedLogin(MaxFailedLoginAttempts, LoginLockoutMinutes);
 
                 Log.ForContext("AuditType", "Security")
-                   .Warning("SECURITY_AUDIT LoginFailed Address={Address}", request.Address);
+                   .Warning("SECURITY_AUDIT LoginFailed Address={Address}", SanitizeForLog(request.Address));
 
                 if (_userManagerService.IsLoginLocked(out _))
                 {
                     _logger.LogWarning("Owner login locked for {Minutes} minutes.", LoginLockoutMinutes);
                     Log.ForContext("AuditType", "Security")
-                       .Warning("SECURITY_AUDIT LockoutApplied Address={Address} Minutes={Minutes}", request.Address, LoginLockoutMinutes);
+                       .Warning("SECURITY_AUDIT LockoutApplied Address={Address} Minutes={Minutes}", SanitizeForLog(request.Address), LoginLockoutMinutes);
                 }
             }
 
@@ -161,7 +167,7 @@ public class SecurityController : ControllerBase
         if (SingleAdminMode && user.Role != UserRole.Admin)
         {
             Log.ForContext("AuditType", "Security")
-               .Warning("SECURITY_AUDIT LoginDenied NonAdminRole Address={Address} Role={Role}", user.Address, user.Role.ToString());
+               .Warning("SECURITY_AUDIT LoginDenied NonAdminRole Address={Address} Role={Role}", SanitizeForLog(user.Address), user.Role.ToString());
             return Unauthorized("Only owner admin account is allowed.");
         }
 
@@ -169,7 +175,7 @@ public class SecurityController : ControllerBase
             _userManagerService.ResetLoginAttempts();
 
         Log.ForContext("AuditType", "Security")
-           .Information("SECURITY_AUDIT LoginSuccess Address={Address} UserId={UserId}", user.Address, user.UserId);
+           .Information("SECURITY_AUDIT LoginSuccess Address={Address} UserId={UserId}", SanitizeForLog(user.Address), SanitizeForLog(user.UserId));
 
         var tokenResponse = _jwtTokenService.GenerateToken(user.UserId, user.Address, user.Role.ToString());
 
@@ -227,7 +233,7 @@ public class SecurityController : ControllerBase
             return Unauthorized("Failed to change password. Check old password.");
 
         Log.ForContext("AuditType", "Security")
-           .Information("SECURITY_AUDIT PasswordChanged Address={Address}", request.Address);
+           .Information("SECURITY_AUDIT PasswordChanged Address={Address}", SanitizeForLog(request.Address));
 
         return Ok(new { success = true, message = "Password changed successfully" });
     }
@@ -372,7 +378,7 @@ public class SecurityController : ControllerBase
         if (SingleAdminMode && !string.Equals(address, OwnerAddress, StringComparison.Ordinal))
         {
             Log.ForContext("AuditType", "Security")
-               .Warning("SECURITY_AUDIT TokenValidationDenied NonOwnerAddress={Address}", address ?? "null");
+               .Warning("SECURITY_AUDIT TokenValidationDenied NonOwnerAddress={Address}", SanitizeForLog(address));
             return Ok(new { isValid = false });
         }
 
@@ -381,7 +387,7 @@ public class SecurityController : ControllerBase
             expiration = DateTimeOffset.FromUnixTimeSeconds(unixExp).UtcDateTime;
 
         Log.ForContext("AuditType", "Security")
-           .Information("SECURITY_AUDIT TokenValidationSuccess Address={Address} UserId={UserId}", address ?? "unknown", userId ?? "unknown");
+           .Information("SECURITY_AUDIT TokenValidationSuccess Address={Address} UserId={UserId}", SanitizeForLog(address), SanitizeForLog(userId));
 
         return Ok(new
         {
