@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\WolfBlockchain.Core\WolfBlockchain.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\WolfBlockchain.Protocol\WolfBlockchain.Protocol.csproj" />
+    <ProjectReference Include="..\..\..\src\WolfBlockchain.Wallet\WolfBlockchain.Wallet.csproj" />
+    <ProjectReference Include="..\..\..\src\WolfBlockchain.Networking\WolfBlockchain.Networking.csproj" />
+    <ProjectReference Include="..\..\..\src\WolfBlockchain.Storage\WolfBlockchain.Storage.csproj" />
+    <ProjectReference Include="..\..\..\src\WolfBlockchain.Consensus\WolfBlockchain.Consensus.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>
