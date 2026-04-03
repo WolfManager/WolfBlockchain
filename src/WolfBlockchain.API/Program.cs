@@ -132,6 +132,7 @@ builder.Services.AddAuthorizationBuilder()
 
 // ============= DEPENDENCY INJECTION =============
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddSingleton<IUserManagerService, UserManagerService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IInputSanitizer, InputSanitizer>();
 builder.Services.AddScoped<ICacheService, CacheService>();
