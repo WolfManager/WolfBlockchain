@@ -8,8 +8,14 @@ namespace WolfBlockchain.API.Controllers;
 [Route("api/[controller]")]
 public class BlockchainController : ControllerBase
 {
-    private static Blockchain _blockchain = new Blockchain();
-    private static BlockchainStorage _storage = new BlockchainStorage();
+    private readonly Blockchain _blockchain;
+    private readonly BlockchainStorage _storage;
+
+    public BlockchainController(Blockchain blockchain, BlockchainStorage storage)
+    {
+        _blockchain = blockchain;
+        _storage = storage;
+    }
 
     [HttpGet("info")]
     public IActionResult GetInfo()
@@ -97,13 +103,21 @@ public class BlockchainController : ControllerBase
         return Ok(new { Message = "Blockchain saved successfully" });
     }
 
+    private static readonly object _loadLock = new();
+
     [HttpPost("load")]
     public IActionResult LoadBlockchain()
     {
         var loaded = _storage.LoadBlockchain();
         if (loaded != null)
         {
-            _blockchain = loaded;
+            lock (_loadLock)
+            {
+                _blockchain.Chain = loaded.Chain;
+                _blockchain.Difficulty = loaded.Difficulty;
+                _blockchain.PendingTransactions = loaded.PendingTransactions;
+                _blockchain.MiningReward = loaded.MiningReward;
+            }
             return Ok(new { Message = "Blockchain loaded successfully", TotalBlocks = _blockchain.Chain.Count });
         }
         return NotFound("No saved blockchain found");

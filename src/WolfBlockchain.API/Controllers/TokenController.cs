@@ -7,8 +7,12 @@ namespace WolfBlockchain.API.Controllers;
 [Route("api/[controller]")]
 public class TokenController : ControllerBase
 {
-    // Instanta globala de TokenManager
-    private static TokenManager _tokenManager = new TokenManager("WOLFADMIN");
+    private readonly TokenManager _tokenManager;
+
+    public TokenController(TokenManager tokenManager)
+    {
+        _tokenManager = tokenManager;
+    }
 
     /// <summary>
     /// Creeaza un nou token

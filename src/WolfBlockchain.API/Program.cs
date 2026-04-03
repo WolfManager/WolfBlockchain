@@ -137,6 +137,12 @@ builder.Services.AddScoped<IInputSanitizer, InputSanitizer>();
 builder.Services.AddScoped<ICacheService, CacheService>();
 builder.Services.AddScoped<IPerformanceOptimizationService, PerformanceOptimizationService>();
 
+// Core blockchain singletons (shared state across requests)
+var ownerAddress = builder.Configuration["Blockchain:OwnerAddress"] ?? "WOLFADMIN";
+builder.Services.AddSingleton<WolfBlockchain.Core.TokenManager>(sp => new WolfBlockchain.Core.TokenManager(ownerAddress));
+builder.Services.AddSingleton<WolfBlockchain.Core.Blockchain>();
+builder.Services.AddSingleton<WolfBlockchain.Storage.BlockchainStorage>();
+
 // Task 4: API Optimization Services
 builder.Services.AddScoped<IConnectionPoolingService, ConnectionPoolingService>();
 builder.Services.AddScoped<IBatchingService, BatchingService>();
