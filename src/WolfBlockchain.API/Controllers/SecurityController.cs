@@ -132,13 +132,13 @@ public class SecurityController : ControllerBase
             if (_userManagerService.IsLoginLocked(out var lockedUntil))
             {
                 Log.ForContext("AuditType", "Security")
-                   .Warning("SECURITY_AUDIT LoginLocked Address={Address} LockedUntil={LockedUntil}", SanitizeForLog(request.Address), lockedUntil!.Value);
+                   .Warning("SECURITY_AUDIT LoginLocked Address={Address} LockedUntil={LockedUntil}", SanitizeForLog(request.Address), lockedUntil.GetValueOrDefault());
 
                 return StatusCode(StatusCodes.Status423Locked, new
                 {
                     success = false,
                     message = "Login temporarily locked due to repeated failed attempts.",
-                    lockedUntilUtc = lockedUntil.Value
+                    lockedUntilUtc = lockedUntil.GetValueOrDefault()
                 });
             }
         }

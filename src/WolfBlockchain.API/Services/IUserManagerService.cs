@@ -51,7 +51,7 @@ public interface IUserManagerService
     bool UpdateUserRole(string address, UserRole newRole);
 
     /// <summary>
-    /// Bootstrap atomics: verifica daca nu exista utilizatori, apoi creaza owner-ul cu rol Admin.
+    /// Bootstrap atomic: verifica daca nu exista utilizatori, apoi creaza owner-ul cu rol Admin.
     /// Returneaza null daca owner-ul este deja initializat.
     /// </summary>
     BlockchainUser? BootstrapOwner(string address, string username, string password);
