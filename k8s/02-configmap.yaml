@@ -42,6 +42,13 @@ data:
   Logging__LogLevel__Microsoft_EntityFrameworkCore: "Warning"
 
   # Blockchain/RPC non-sensitive settings
+  # RPC endpoints (RPC_PRIMARY, RPC_FALLBACK) and credentials (RPC_AUTH_TOKEN)
+  # are sensitive and must be injected via the wolf-blockchain-secrets K8s Secret.
+  # See k8s/03-secret.yaml for the required keys.
+  # Supported providers: Infura (https://<network>.infura.io/v3/<project-id>),
+  #   Alchemy (https://<network>.g.alchemy.com/v2/<api-key>), or any JSON-RPC endpoint.
+  # If no RPC endpoint is configured the API remains functional; only the /ready
+  # endpoint will report rpc.configured=false.
   Blockchain__Network: "staging"
   Blockchain__RpcTimeoutSeconds: "1"
   Blockchain__RpcRetryCount: "0"

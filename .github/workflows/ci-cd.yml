@@ -1,0 +1,62 @@
+# ============================================================
+# 🐺 WOLF BLOCKCHAIN — Continuous Integration
+# ============================================================
+# Runs on every push / PR to main or develop.
+# Jobs: build → test (with coverage) → upload artifacts.
+
+name: WolfBlockchain CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-test-analyze:
+    name: Build, Test & Analyze
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore WolfBlockchain.slnx
+
+      - name: Build (Release)
+        run: dotnet build WolfBlockchain.slnx --configuration Release --no-restore
+
+      - name: Run tests with coverage
+        run: |
+          dotnet test tests/WolfBlockchain.Tests/WolfBlockchain.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --verbosity normal \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=test-results.trx"
+        env:
+          Jwt__Secret: "CI-Test-Secret-Must-Be-32-Chars-Min!"
+          Security__SingleAdminMode: "true"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/TestResults/**/*.trx"
+          retention-days: 7
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: "**/TestResults/**/coverage.cobertura.xml"
+          retention-days: 7

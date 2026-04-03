@@ -1,0 +1,235 @@
+# ============================================================
+# 🐺 WOLF BLOCKCHAIN — Deploy to Staging & Production
+# ============================================================
+# Triggered manually (workflow_dispatch) or after CI passes on main.
+#
+# Required GitHub Actions Secrets (set via configure-github-actions.ps1
+# or GitHub UI → Settings → Secrets and variables → Actions):
+#
+#   DOCKER_USERNAME          — Docker Hub / registry username
+#   DOCKER_PASSWORD          — Docker Hub / registry password or token
+#   KUBE_CONFIG_STAGING      — base64-encoded kubeconfig for staging cluster
+#   KUBE_CONFIG_PROD         — base64-encoded kubeconfig for production cluster
+#
+# Required GitHub Actions Variables (non-sensitive, set automatically by
+# configure-github-actions.ps1):
+#
+#   STAGING_NAMESPACE        — Kubernetes namespace for staging   (default: wolf-blockchain)
+#   PRODUCTION_NAMESPACE     — Kubernetes namespace for production (default: wolf-blockchain)
+#
+# Kubernetes Secrets (applied directly to each cluster — NOT stored in GitHub):
+#
+#   wolf-blockchain-secrets  — contains ConnectionStrings__DefaultConnection,
+#                              JWT_SECRET, Security__BootstrapToken,
+#                              RPC_PRIMARY, RPC_FALLBACK, RPC_AUTH_TOKEN, etc.
+#   See k8s/03-secret.yaml for the full template.
+
+name: WolfBlockchain Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: "Docker image tag to deploy (e.g. v2.0.1)"
+        required: false
+        default: ""
+  workflow_run:
+    workflows: ["WolfBlockchain CI"]
+    branches: [ main ]
+    types: [ completed ]
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: wolfblockchain
+
+jobs:
+  # ------------------------------------------------------------------
+  # 1. Determine what triggered this run and set shared outputs
+  # ------------------------------------------------------------------
+  prepare:
+    name: Prepare deployment context
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_env: ${{ steps.ctx.outputs.deploy_env }}
+      image_tag: ${{ steps.ctx.outputs.image_tag }}
+      should_deploy: ${{ steps.ctx.outputs.should_deploy }}
+    steps:
+      - name: Set deployment context
+        id: ctx
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            DEPLOY_ENV="${{ github.event.inputs.environment }}"
+            IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+          else
+            # Auto-triggered from successful CI run on main → staging only
+            DEPLOY_ENV="staging"
+            IMAGE_TAG=""
+          fi
+
+          # Skip if triggered by a failed CI run
+          if [ "${{ github.event_name }}" = "workflow_run" ] && \
+             [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD 2>/dev/null || echo 'latest')}"
+          echo "deploy_env=$DEPLOY_ENV"       >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG"         >> "$GITHUB_OUTPUT"
+          echo "should_deploy=true"           >> "$GITHUB_OUTPUT"
+
+  # ------------------------------------------------------------------
+  # 2. Build & push Docker image
+  # ------------------------------------------------------------------
+  build-push:
+    name: Build & push Docker image
+    needs: prepare
+    if: needs.prepare.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      full_image: ${{ steps.meta.outputs.full_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          TAG="${{ needs.prepare.outputs.image_tag }}"
+          FULL="${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${TAG}"
+          echo "full_image=$FULL" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.full_image }}
+            ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+
+  # ------------------------------------------------------------------
+  # 3. Deploy to Staging
+  # ------------------------------------------------------------------
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [ prepare, build-push ]
+    if: needs.prepare.outputs.should_deploy == 'true' && needs.prepare.outputs.deploy_env == 'staging'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    env:
+      STAGING_NAMESPACE: ${{ vars.STAGING_NAMESPACE || 'wolf-blockchain' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl (staging)
+        uses: azure/setup-kubectl@v4
+
+      - name: Set kubeconfig
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Apply ConfigMap
+        run: kubectl apply -f k8s/02-configmap.yaml -n "$STAGING_NAMESPACE"
+
+      - name: Update deployment image
+        run: |
+          kubectl set image deployment/wolf-blockchain-api \
+            api=${{ needs.build-push.outputs.full_image }} \
+            -n "$STAGING_NAMESPACE"
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/wolf-blockchain-api \
+            -n "$STAGING_NAMESPACE" \
+            --timeout=300s
+
+      - name: Run smoke tests
+        run: bash scripts/smoke-tests.sh "http://localhost" 3 "wolf-blockchain.local"
+        continue-on-error: true
+
+  # ------------------------------------------------------------------
+  # 4. Deploy to Production (manual approval required)
+  # ------------------------------------------------------------------
+  deploy-production:
+    name: Deploy to Production
+    needs: [ prepare, build-push ]
+    if: needs.prepare.outputs.should_deploy == 'true' && needs.prepare.outputs.deploy_env == 'production'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      PRODUCTION_NAMESPACE: ${{ vars.PRODUCTION_NAMESPACE || 'wolf-blockchain' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl (production)
+        uses: azure/setup-kubectl@v4
+
+      - name: Set kubeconfig
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG_PROD }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Validate secrets are not placeholders
+        run: |
+          for KEY in ConnectionStrings__DefaultConnection JWT_SECRET Security__BootstrapToken RPC_PRIMARY RPC_FALLBACK; do
+            VAL=$(kubectl get secret wolf-blockchain-secrets -n "$PRODUCTION_NAMESPACE" \
+              -o jsonpath="{.data.${KEY}}" 2>/dev/null | base64 -d || echo "")
+            if [ -z "$VAL" ] || echo "$VAL" | grep -qE '^__.*__$'; then
+              echo "❌ Secret '$KEY' is missing or still a placeholder. Aborting."
+              exit 1
+            fi
+          done
+          echo "✅ All required secrets are configured."
+
+      - name: Apply ConfigMap
+        run: kubectl apply -f k8s/02-configmap.yaml -n "$PRODUCTION_NAMESPACE"
+
+      - name: Update deployment image
+        run: |
+          kubectl set image deployment/wolf-blockchain-api \
+            api=${{ needs.build-push.outputs.full_image }} \
+            -n "$PRODUCTION_NAMESPACE"
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/wolf-blockchain-api \
+            -n "$PRODUCTION_NAMESPACE" \
+            --timeout=300s
+
+      - name: Verify pod readiness
+        run: |
+          READY=$(kubectl get deployment wolf-blockchain-api -n "$PRODUCTION_NAMESPACE" \
+            -o jsonpath='{.status.readyReplicas}')
+          DESIRED=$(kubectl get deployment wolf-blockchain-api -n "$PRODUCTION_NAMESPACE" \
+            -o jsonpath='{.spec.replicas}')
+          if [ "$READY" != "$DESIRED" ]; then
+            echo "❌ Only $READY/$DESIRED replicas ready."
+            exit 1
+          fi
+          echo "✅ All $READY/$DESIRED replicas are ready."
+
+      - name: Run smoke tests
+        run: bash scripts/smoke-tests.sh "http://localhost" 3 "wolf-blockchain.local"
