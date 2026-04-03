@@ -11,19 +11,24 @@ namespace WolfBlockchain.API.Controllers;
 [Authorize]
 public class SecurityController : ControllerBase
 {
-    private static readonly UserManager _userManager = new UserManager("WOLFADMIN");
     private static readonly object _bootstrapLock = new();
     private static readonly object _loginLock = new();
     private static int _failedOwnerLoginAttempts;
     private static DateTime? _ownerLockedUntilUtc;
 
     private readonly IJwtTokenService _jwtTokenService;
+    private readonly IUserManagerService _userManagerService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<SecurityController> _logger;
 
-    public SecurityController(IJwtTokenService jwtTokenService, IConfiguration configuration, ILogger<SecurityController> logger)
+    public SecurityController(
+        IJwtTokenService jwtTokenService,
+        IUserManagerService userManagerService,
+        IConfiguration configuration,
+        ILogger<SecurityController> logger)
     {
         _jwtTokenService = jwtTokenService;
+        _userManagerService = userManagerService;
         _configuration = configuration;
         _logger = logger;
     }
@@ -47,7 +52,7 @@ public class SecurityController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest("Invalid request");
 
-        var user = _userManager.RegisterUser(
+        var user = _userManagerService.RegisterUser(
             request.Address,
             request.Username,
             request.Role,
@@ -85,13 +90,13 @@ public class SecurityController : ControllerBase
 
         lock (_bootstrapLock)
         {
-            if (_userManager.GetAllUsers().Count > 0)
+            if (_userManagerService.GetAllUsers().Count > 0)
                 return Conflict("Owner already initialized.");
 
             if (!string.Equals(request.Address, OwnerAddress, StringComparison.Ordinal))
                 return BadRequest("Bootstrap address must match configured owner address.");
 
-            var owner = _userManager.RegisterUser(request.Address, request.Username, UserRole.Admin, request.Password);
+            var owner = _userManagerService.RegisterUser(request.Address, request.Username, UserRole.Admin, request.Password);
             if (owner == null)
                 return BadRequest("Failed to initialize owner.");
 
@@ -146,7 +151,7 @@ public class SecurityController : ControllerBase
             }
         }
 
-        var user = _userManager.AuthenticateUser(request.Address, request.Password);
+        var user = _userManagerService.AuthenticateUser(request.Address, request.Password);
         if (user == null)
         {
             if (SingleAdminMode)
@@ -215,7 +220,7 @@ public class SecurityController : ControllerBase
         if (SingleAdminMode && !string.Equals(address, OwnerAddress, StringComparison.Ordinal))
             return StatusCode(StatusCodes.Status403Forbidden, "Only owner account is accessible in single-admin mode.");
 
-        var user = _userManager.GetUserByAddress(address);
+        var user = _userManagerService.GetUserByAddress(address);
         if (user == null)
             return NotFound("User not found");
 
@@ -241,7 +246,7 @@ public class SecurityController : ControllerBase
         if (SingleAdminMode && !string.Equals(request.Address, OwnerAddress, StringComparison.Ordinal))
             return StatusCode(StatusCodes.Status403Forbidden, "Only owner password can be changed.");
 
-        var success = _userManager.ChangePassword(request.Address, request.OldPassword, request.NewPassword);
+        var success = _userManagerService.ChangePassword(request.Address, request.OldPassword, request.NewPassword);
         if (!success)
             return Unauthorized("Failed to change password. Check old password.");
 
@@ -260,7 +265,7 @@ public class SecurityController : ControllerBase
         if (!Enum.TryParse<Permission>(permission, out var perm))
             return BadRequest("Invalid permission");
 
-        var hasPermission = _userManager.HasPermission(address, perm);
+        var hasPermission = _userManagerService.HasPermission(address, perm);
 
         return Ok(new
         {
@@ -282,7 +287,7 @@ public class SecurityController : ControllerBase
         if (!Enum.TryParse<Permission>(request.Permission, out var perm))
             return BadRequest("Invalid permission");
 
-        var success = _userManager.GrantPermission(request.Address, perm);
+        var success = _userManagerService.GrantPermission(request.Address, perm);
         if (!success)
             return BadRequest("Failed to grant permission");
 
@@ -301,7 +306,7 @@ public class SecurityController : ControllerBase
         if (!Enum.TryParse<Permission>(request.Permission, out var perm))
             return BadRequest("Invalid permission");
 
-        var success = _userManager.RevokePermission(request.Address, perm);
+        var success = _userManagerService.RevokePermission(request.Address, perm);
         if (!success)
             return BadRequest("Failed to revoke permission");
 
@@ -314,7 +319,7 @@ public class SecurityController : ControllerBase
         if (SingleAdminMode)
             return StatusCode(StatusCodes.Status403Forbidden, "User deactivation is disabled in single-admin mode.");
 
-        var success = _userManager.DeactivateUser(request.Address);
+        var success = _userManagerService.DeactivateUser(request.Address);
         if (!success)
             return BadRequest("Failed to deactivate user");
 
@@ -327,7 +332,7 @@ public class SecurityController : ControllerBase
         if (SingleAdminMode)
             return StatusCode(StatusCodes.Status403Forbidden, "User activation is disabled in single-admin mode.");
 
-        var success = _userManager.ActivateUser(request.Address);
+        var success = _userManagerService.ActivateUser(request.Address);
         if (!success)
             return BadRequest("Failed to activate user");
 
@@ -337,7 +342,7 @@ public class SecurityController : ControllerBase
     [HttpGet("users")]
     public IActionResult GetAllUsers()
     {
-        var users = _userManager.GetAllUsers();
+        var users = _userManagerService.GetAllUsers();
 
         if (SingleAdminMode)
         {
