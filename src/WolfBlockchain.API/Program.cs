@@ -267,13 +267,24 @@ app.MapGet("/ready", async (IConfiguration configuration, IRpcFailoverService rp
         rpc = new RpcProbeResult(false, null, false, "RPC probe timed out.");
     }
 
-    var isReady = jwtConfigured && connectionStringConfigured && storageReady && rpc.IsHealthy;
+    // RPC is optional: if no endpoint is configured the service is still ready.
+    // A configured but unreachable RPC endpoint is a hard failure.
+    var rpcNotConfigured = rpc.Error == "No RPC endpoint configured.";
+    var rpcReady = rpc.IsHealthy || rpcNotConfigured;
+
+    var isReady = jwtConfigured && connectionStringConfigured && storageReady && rpcReady;
 
     return isReady
         ? Results.Ok(new
         {
             status = "ready",
-            rpc = new { healthy = true, activeHost = rpc.ActiveEndpointHost, fallback = rpc.UsedFallback },
+            rpc = new
+            {
+                healthy = rpc.IsHealthy,
+                configured = !rpcNotConfigured,
+                activeHost = rpc.ActiveEndpointHost,
+                fallback = rpc.UsedFallback
+            },
             storage = "ok"
         })
         : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
