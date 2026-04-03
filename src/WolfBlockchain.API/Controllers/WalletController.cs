@@ -8,20 +8,28 @@ namespace WolfBlockchain.API.Controllers;
 [Route("api/[controller]")]
 public class WalletController : ControllerBase
 {
-    private static List<WalletClass> _wallets = new List<WalletClass>();
+    private static List<WalletStorageEntry> _wallets = new List<WalletStorageEntry>();
     private static BlockchainStorage _storage = new BlockchainStorage();
 
     [HttpPost("create")]
     public IActionResult CreateWallet()
     {
         var wallet = new WalletClass();
-        _wallets.Add(wallet);
+        var entry = new WalletStorageEntry
+        {
+            Address = wallet.Address,
+            PublicKey = wallet.PublicKey,
+            PrivateKey = wallet.PrivateKey,
+            Balance = wallet.Balance,
+            TokenBalances = new Dictionary<string, decimal>(wallet.TokenBalances)
+        };
+        _wallets.Add(entry);
         _storage.SaveWallets(_wallets);
         return Ok(new
         {
             Message = "Wallet created successfully",
-            Address = wallet.Address,
-            PublicKey = wallet.PublicKey
+            Address = entry.Address,
+            PublicKey = entry.PublicKey
         });
     }
 

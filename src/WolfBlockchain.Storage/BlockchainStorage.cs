@@ -3,6 +3,16 @@ using WolfBlockchain.Core;
 
 namespace WolfBlockchain.Storage;
 
+/// <summary>Lightweight DTO used to persist wallet data without introducing a dependency on the Wallet project.</summary>
+public sealed record WalletStorageEntry
+{
+    public string? Address { get; init; }
+    public string? PublicKey { get; init; }
+    public string? PrivateKey { get; init; }
+    public decimal Balance { get; init; }
+    public Dictionary<string, decimal>? TokenBalances { get; init; }
+}
+
 public class BlockchainStorage
 {
     private readonly string _dataPath;
@@ -53,7 +63,7 @@ public class BlockchainStorage
         }
     }
 
-    public void SaveWallets(List<WolfBlockchain.Wallet.Wallet> wallets)
+    public void SaveWallets(IEnumerable<WalletStorageEntry> wallets)
     {
         var json = JsonSerializer.Serialize(wallets, new JsonSerializerOptions
         {
@@ -63,25 +73,25 @@ public class BlockchainStorage
         Console.WriteLine($"Wallets saved to {_walletsFile}");
     }
 
-    public List<WolfBlockchain.Wallet.Wallet>? LoadWallets()
+    public List<WalletStorageEntry>? LoadWallets()
     {
         if (!File.Exists(_walletsFile))
         {
             Console.WriteLine("No wallets file found.");
-            return new List<WolfBlockchain.Wallet.Wallet>();
+            return new List<WalletStorageEntry>();
         }
 
         try
         {
             var json = File.ReadAllText(_walletsFile);
-            var wallets = JsonSerializer.Deserialize<List<WolfBlockchain.Wallet.Wallet>>(json);
+            var wallets = JsonSerializer.Deserialize<List<WalletStorageEntry>>(json);
             Console.WriteLine($"Wallets loaded from {_walletsFile}");
-            return wallets ?? new List<WolfBlockchain.Wallet.Wallet>();
+            return wallets ?? new List<WalletStorageEntry>();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading wallets: {ex.Message}");
-            return new List<WolfBlockchain.Wallet.Wallet>();
+            return new List<WalletStorageEntry>();
         }
     }
 }

@@ -1,0 +1,4 @@
+<Project>
+  <!-- Package versions for reference; central package management is not enabled here
+       to preserve compatibility with existing projects that define their own versions. -->
+</Project>
