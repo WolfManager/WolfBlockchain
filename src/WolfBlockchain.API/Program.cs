@@ -136,6 +136,7 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IInputSanitizer, InputSanitizer>();
 builder.Services.AddScoped<ICacheService, CacheService>();
 builder.Services.AddScoped<IPerformanceOptimizationService, PerformanceOptimizationService>();
+builder.Services.AddSingleton<IUserManagerService, UserManagerService>();
 
 // Task 4: API Optimization Services
 builder.Services.AddScoped<IConnectionPoolingService, ConnectionPoolingService>();
@@ -166,6 +167,7 @@ Log.Information("✅ SignalR configured for real-time blockchain updates");
 
 // ============= CACHING (Memory-based, Redis-ready) =============
 builder.Services.AddMemoryCache();
+builder.Services.AddDistributedMemoryCache();
 Log.Information("✅ Caching service configured (in-memory)");
 Log.Information("💡 Redis support ready: Add StackExchange.Redis NuGet package to enable");
 

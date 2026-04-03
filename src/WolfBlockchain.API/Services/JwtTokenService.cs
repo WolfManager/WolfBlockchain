@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.IdentityModel.Tokens;
 
 namespace WolfBlockchain.API.Services;
@@ -45,16 +46,18 @@ public class JwtTokenService : IJwtTokenService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<JwtTokenService> _logger;
+    private readonly IDistributedCache _distributedCache;
     private readonly string _jwtSecret;
     private readonly int _jwtExpirationMinutes;
     private readonly int _refreshTokenExpirationDays;
-    private readonly HashSet<string> _revokedTokens = new(StringComparer.OrdinalIgnoreCase);
-    private readonly object _tokenLock = new();
 
-    public JwtTokenService(IConfiguration configuration, ILogger<JwtTokenService> logger)
+    private const string RevokedTokenCacheKeyPrefix = "revoked_refresh_token:";
+
+    public JwtTokenService(IConfiguration configuration, ILogger<JwtTokenService> logger, IDistributedCache distributedCache)
     {
         _configuration = configuration;
         _logger = logger;
+        _distributedCache = distributedCache;
         
         _jwtSecret = _configuration["Jwt:Secret"] 
             ?? throw new InvalidOperationException("JWT:Secret not configured");
@@ -171,58 +174,57 @@ public class JwtTokenService : IJwtTokenService
     }
 
     /// <summary>
-    /// Revokes a refresh token by adding it to blacklist
+    /// Revokes a refresh token by storing it in the distributed cache
     /// </summary>
-    public Task<bool> RevokeRefreshTokenAsync(string userId, string refreshToken)
+    public async Task<bool> RevokeRefreshTokenAsync(string userId, string refreshToken)
     {
         if (string.IsNullOrWhiteSpace(refreshToken))
-            return Task.FromResult(false);
+            return false;
 
         try
         {
-            lock (_tokenLock)
+            var tokenKey = $"{RevokedTokenCacheKeyPrefix}{userId}:{refreshToken}";
+            var options = new DistributedCacheEntryOptions
             {
-                var tokenKey = $"{userId}:{refreshToken}";
-                _revokedTokens.Add(tokenKey);
-            }
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(_refreshTokenExpirationDays)
+            };
+            await _distributedCache.SetStringAsync(tokenKey, "revoked", options);
 
             _logger.LogInformation("Refresh token revoked for user: {UserId}", userId);
-            return Task.FromResult(true);
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error revoking refresh token for user: {UserId}", userId);
-            return Task.FromResult(false);
+            return false;
         }
     }
 
     /// <summary>
-    /// Validates if refresh token is still valid (not revoked)
+    /// Validates if refresh token is still valid (not revoked) by checking the distributed cache
     /// </summary>
-    public Task<bool> ValidateRefreshTokenAsync(string userId, string refreshToken)
+    public async Task<bool> ValidateRefreshTokenAsync(string userId, string refreshToken)
     {
         if (string.IsNullOrWhiteSpace(refreshToken) || string.IsNullOrWhiteSpace(userId))
-            return Task.FromResult(false);
+            return false;
 
         try
         {
-            lock (_tokenLock)
-            {
-                var tokenKey = $"{userId}:{refreshToken}";
-                var isRevoked = _revokedTokens.Contains(tokenKey);
-                
-                if (isRevoked)
-                {
-                    _logger.LogWarning("Attempt to use revoked refresh token for user: {UserId}", userId);
-                }
+            var tokenKey = $"{RevokedTokenCacheKeyPrefix}{userId}:{refreshToken}";
+            var value = await _distributedCache.GetStringAsync(tokenKey);
+            var isRevoked = value != null;
 
-                return Task.FromResult(!isRevoked);
+            if (isRevoked)
+            {
+                _logger.LogWarning("Attempt to use revoked refresh token for user: {UserId}", userId);
             }
+
+            return !isRevoked;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error validating refresh token for user: {UserId}", userId);
-            return Task.FromResult(false);
+            return false;
         }
     }
 }
