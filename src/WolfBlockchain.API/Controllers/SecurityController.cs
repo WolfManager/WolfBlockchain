@@ -11,18 +11,18 @@ namespace WolfBlockchain.API.Controllers;
 [Authorize]
 public class SecurityController : ControllerBase
 {
-    private static readonly UserManager _userManager = new UserManager("WOLFADMIN");
-    private static readonly object _bootstrapLock = new();
-    private static readonly object _loginLock = new();
-    private static int _failedOwnerLoginAttempts;
-    private static DateTime? _ownerLockedUntilUtc;
-
+    private readonly IUserManagerService _userManagerService;
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<SecurityController> _logger;
 
-    public SecurityController(IJwtTokenService jwtTokenService, IConfiguration configuration, ILogger<SecurityController> logger)
+    public SecurityController(
+        IUserManagerService userManagerService,
+        IJwtTokenService jwtTokenService,
+        IConfiguration configuration,
+        ILogger<SecurityController> logger)
     {
+        _userManagerService = userManagerService;
         _jwtTokenService = jwtTokenService;
         _configuration = configuration;
         _logger = logger;
@@ -33,6 +33,12 @@ public class SecurityController : ControllerBase
     private string BootstrapToken => _configuration["Security:BootstrapToken"] ?? string.Empty;
     private int MaxFailedLoginAttempts => _configuration.GetValue<int>("Security:MaxFailedLoginAttempts", 5);
     private int LoginLockoutMinutes => _configuration.GetValue<int>("Security:LoginLockoutMinutes", 30);
+
+    /// <summary>Strips newlines and control characters to prevent log-injection attacks.</summary>
+    private static string SanitizeForLog(string? value)
+        => string.IsNullOrEmpty(value)
+            ? string.Empty
+            : System.Text.RegularExpressions.Regex.Replace(value, @"[\r\n\t\x00-\x1f\x7f]", "_");
 
     /// <summary>
     /// Inregistrarea publică este dezactivată în single-admin mode.
@@ -47,7 +53,7 @@ public class SecurityController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest("Invalid request");
 
-        var user = _userManager.RegisterUser(
+        var user = _userManagerService.RegisterUser(
             request.Address,
             request.Username,
             request.Role,
@@ -83,31 +89,25 @@ public class SecurityController : ControllerBase
         if (!Request.Headers.TryGetValue("X-Bootstrap-Token", out var provided) || provided != BootstrapToken)
             return Unauthorized("Invalid bootstrap token.");
 
-        lock (_bootstrapLock)
+        if (!string.Equals(request.Address, OwnerAddress, StringComparison.Ordinal))
+            return BadRequest("Bootstrap address must match configured owner address.");
+
+        var owner = _userManagerService.BootstrapOwner(request.Address, request.Username, request.Password);
+        if (owner == null)
+            return Conflict("Owner already initialized.");
+
+        _logger.LogInformation("Owner bootstrap completed for address: {OwnerAddress}", SanitizeForLog(request.Address));
+        Log.ForContext("AuditType", "Security")
+           .Information("SECURITY_AUDIT OwnerBootstrap Success Address={Address}", SanitizeForLog(request.Address));
+
+        return Ok(new
         {
-            if (_userManager.GetAllUsers().Count > 0)
-                return Conflict("Owner already initialized.");
-
-            if (!string.Equals(request.Address, OwnerAddress, StringComparison.Ordinal))
-                return BadRequest("Bootstrap address must match configured owner address.");
-
-            var owner = _userManager.RegisterUser(request.Address, request.Username, UserRole.Admin, request.Password);
-            if (owner == null)
-                return BadRequest("Failed to initialize owner.");
-
-            _logger.LogInformation("Owner bootstrap completed for address: {OwnerAddress}", request.Address);
-            Log.ForContext("AuditType", "Security")
-               .Information("SECURITY_AUDIT OwnerBootstrap Success Address={Address}", request.Address);
-
-            return Ok(new
-            {
-                success = true,
-                message = "Owner initialized successfully.",
-                userId = owner.UserId,
-                address = owner.Address,
-                role = owner.Role.ToString()
-            });
-        }
+            success = true,
+            message = "Owner initialized successfully.",
+            userId = owner.UserId,
+            address = owner.Address,
+            role = owner.Role.ToString()
+        });
     }
 
     /// <summary>
@@ -125,46 +125,39 @@ public class SecurityController : ControllerBase
             if (!string.Equals(request.Address, OwnerAddress, StringComparison.Ordinal))
             {
                 Log.ForContext("AuditType", "Security")
-                   .Warning("SECURITY_AUDIT LoginDenied NonOwnerAddress={Address}", request.Address);
+                   .Warning("SECURITY_AUDIT LoginDenied NonOwnerAddress={Address}", SanitizeForLog(request.Address));
                 return Unauthorized("Invalid credentials");
             }
 
-            lock (_loginLock)
+            if (_userManagerService.IsLoginLocked(out var lockedUntil))
             {
-                if (_ownerLockedUntilUtc.HasValue && _ownerLockedUntilUtc.Value > DateTime.UtcNow)
-                {
-                    Log.ForContext("AuditType", "Security")
-                       .Warning("SECURITY_AUDIT LoginLocked Address={Address} LockedUntil={LockedUntil}", request.Address, _ownerLockedUntilUtc.Value);
+                Log.ForContext("AuditType", "Security")
+                   .Warning("SECURITY_AUDIT LoginLocked Address={Address} LockedUntil={LockedUntil}", SanitizeForLog(request.Address), lockedUntil.GetValueOrDefault());
 
-                    return StatusCode(StatusCodes.Status423Locked, new
-                    {
-                        success = false,
-                        message = "Login temporarily locked due to repeated failed attempts.",
-                        lockedUntilUtc = _ownerLockedUntilUtc.Value
-                    });
-                }
+                return StatusCode(StatusCodes.Status423Locked, new
+                {
+                    success = false,
+                    message = "Login temporarily locked due to repeated failed attempts.",
+                    lockedUntilUtc = lockedUntil.GetValueOrDefault()
+                });
             }
         }
 
-        var user = _userManager.AuthenticateUser(request.Address, request.Password);
+        var user = _userManagerService.AuthenticateUser(request.Address, request.Password);
         if (user == null)
         {
             if (SingleAdminMode)
             {
-                lock (_loginLock)
+                _userManagerService.RecordFailedLogin(MaxFailedLoginAttempts, LoginLockoutMinutes);
+
+                Log.ForContext("AuditType", "Security")
+                   .Warning("SECURITY_AUDIT LoginFailed Address={Address}", SanitizeForLog(request.Address));
+
+                if (_userManagerService.IsLoginLocked(out _))
                 {
-                    _failedOwnerLoginAttempts++;
-
+                    _logger.LogWarning("Owner login locked for {Minutes} minutes.", LoginLockoutMinutes);
                     Log.ForContext("AuditType", "Security")
-                       .Warning("SECURITY_AUDIT LoginFailed Address={Address} FailedAttempts={Attempts}", request.Address, _failedOwnerLoginAttempts);
-
-                    if (_failedOwnerLoginAttempts >= MaxFailedLoginAttempts)
-                    {
-                        _ownerLockedUntilUtc = DateTime.UtcNow.AddMinutes(LoginLockoutMinutes);
-                        _logger.LogWarning("Owner login locked for {Minutes} minutes after {Attempts} failed attempts.", LoginLockoutMinutes, _failedOwnerLoginAttempts);
-                        Log.ForContext("AuditType", "Security")
-                           .Warning("SECURITY_AUDIT LockoutApplied Address={Address} Minutes={Minutes}", request.Address, LoginLockoutMinutes);
-                    }
+                       .Warning("SECURITY_AUDIT LockoutApplied Address={Address} Minutes={Minutes}", SanitizeForLog(request.Address), LoginLockoutMinutes);
                 }
             }
 
@@ -174,21 +167,15 @@ public class SecurityController : ControllerBase
         if (SingleAdminMode && user.Role != UserRole.Admin)
         {
             Log.ForContext("AuditType", "Security")
-               .Warning("SECURITY_AUDIT LoginDenied NonAdminRole Address={Address} Role={Role}", user.Address, user.Role.ToString());
+               .Warning("SECURITY_AUDIT LoginDenied NonAdminRole Address={Address} Role={Role}", SanitizeForLog(user.Address), user.Role.ToString());
             return Unauthorized("Only owner admin account is allowed.");
         }
 
         if (SingleAdminMode)
-        {
-            lock (_loginLock)
-            {
-                _failedOwnerLoginAttempts = 0;
-                _ownerLockedUntilUtc = null;
-            }
-        }
+            _userManagerService.ResetLoginAttempts();
 
         Log.ForContext("AuditType", "Security")
-           .Information("SECURITY_AUDIT LoginSuccess Address={Address} UserId={UserId}", user.Address, user.UserId);
+           .Information("SECURITY_AUDIT LoginSuccess Address={Address} UserId={UserId}", SanitizeForLog(user.Address), SanitizeForLog(user.UserId));
 
         var tokenResponse = _jwtTokenService.GenerateToken(user.UserId, user.Address, user.Role.ToString());
 
@@ -215,7 +202,7 @@ public class SecurityController : ControllerBase
         if (SingleAdminMode && !string.Equals(address, OwnerAddress, StringComparison.Ordinal))
             return StatusCode(StatusCodes.Status403Forbidden, "Only owner account is accessible in single-admin mode.");
 
-        var user = _userManager.GetUserByAddress(address);
+        var user = _userManagerService.GetUserByAddress(address);
         if (user == null)
             return NotFound("User not found");
 
@@ -241,12 +228,12 @@ public class SecurityController : ControllerBase
         if (SingleAdminMode && !string.Equals(request.Address, OwnerAddress, StringComparison.Ordinal))
             return StatusCode(StatusCodes.Status403Forbidden, "Only owner password can be changed.");
 
-        var success = _userManager.ChangePassword(request.Address, request.OldPassword, request.NewPassword);
+        var success = _userManagerService.ChangePassword(request.Address, request.OldPassword, request.NewPassword);
         if (!success)
             return Unauthorized("Failed to change password. Check old password.");
 
         Log.ForContext("AuditType", "Security")
-           .Information("SECURITY_AUDIT PasswordChanged Address={Address}", request.Address);
+           .Information("SECURITY_AUDIT PasswordChanged Address={Address}", SanitizeForLog(request.Address));
 
         return Ok(new { success = true, message = "Password changed successfully" });
     }
@@ -260,7 +247,7 @@ public class SecurityController : ControllerBase
         if (!Enum.TryParse<Permission>(permission, out var perm))
             return BadRequest("Invalid permission");
 
-        var hasPermission = _userManager.HasPermission(address, perm);
+        var hasPermission = _userManagerService.HasPermission(address, perm);
 
         return Ok(new
         {
@@ -282,7 +269,7 @@ public class SecurityController : ControllerBase
         if (!Enum.TryParse<Permission>(request.Permission, out var perm))
             return BadRequest("Invalid permission");
 
-        var success = _userManager.GrantPermission(request.Address, perm);
+        var success = _userManagerService.GrantPermission(request.Address, perm);
         if (!success)
             return BadRequest("Failed to grant permission");
 
@@ -301,7 +288,7 @@ public class SecurityController : ControllerBase
         if (!Enum.TryParse<Permission>(request.Permission, out var perm))
             return BadRequest("Invalid permission");
 
-        var success = _userManager.RevokePermission(request.Address, perm);
+        var success = _userManagerService.RevokePermission(request.Address, perm);
         if (!success)
             return BadRequest("Failed to revoke permission");
 
@@ -314,7 +301,7 @@ public class SecurityController : ControllerBase
         if (SingleAdminMode)
             return StatusCode(StatusCodes.Status403Forbidden, "User deactivation is disabled in single-admin mode.");
 
-        var success = _userManager.DeactivateUser(request.Address);
+        var success = _userManagerService.DeactivateUser(request.Address);
         if (!success)
             return BadRequest("Failed to deactivate user");
 
@@ -327,7 +314,7 @@ public class SecurityController : ControllerBase
         if (SingleAdminMode)
             return StatusCode(StatusCodes.Status403Forbidden, "User activation is disabled in single-admin mode.");
 
-        var success = _userManager.ActivateUser(request.Address);
+        var success = _userManagerService.ActivateUser(request.Address);
         if (!success)
             return BadRequest("Failed to activate user");
 
@@ -337,7 +324,7 @@ public class SecurityController : ControllerBase
     [HttpGet("users")]
     public IActionResult GetAllUsers()
     {
-        var users = _userManager.GetAllUsers();
+        var users = _userManagerService.GetAllUsers();
 
         if (SingleAdminMode)
         {
@@ -391,7 +378,7 @@ public class SecurityController : ControllerBase
         if (SingleAdminMode && !string.Equals(address, OwnerAddress, StringComparison.Ordinal))
         {
             Log.ForContext("AuditType", "Security")
-               .Warning("SECURITY_AUDIT TokenValidationDenied NonOwnerAddress={Address}", address ?? "null");
+               .Warning("SECURITY_AUDIT TokenValidationDenied NonOwnerAddress={Address}", SanitizeForLog(address));
             return Ok(new { isValid = false });
         }
 
@@ -400,7 +387,7 @@ public class SecurityController : ControllerBase
             expiration = DateTimeOffset.FromUnixTimeSeconds(unixExp).UtcDateTime;
 
         Log.ForContext("AuditType", "Security")
-           .Information("SECURITY_AUDIT TokenValidationSuccess Address={Address} UserId={UserId}", address ?? "unknown", userId ?? "unknown");
+           .Information("SECURITY_AUDIT TokenValidationSuccess Address={Address} UserId={UserId}", SanitizeForLog(address), SanitizeForLog(userId));
 
         return Ok(new
         {
