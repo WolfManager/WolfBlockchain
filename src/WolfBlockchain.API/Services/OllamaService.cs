@@ -249,7 +249,7 @@ public sealed class OllamaService : IOllamaService
     private string ResolveModel(string? model) =>
         !string.IsNullOrWhiteSpace(model) ? model : _options.DefaultModel;
 
-    /// <summary>Strips control characters and newlines to prevent log-injection attacks.</summary>
+    /// <summary>Strips all ASCII control characters (0–31 and 127) to prevent log-injection attacks.</summary>
     private static string SanitizeForLog(string value) =>
-        value.Replace('\n', ' ').Replace('\r', ' ').Replace('\t', ' ');
+        string.Concat(value.Select(c => c < 0x20 || c == 0x7F ? ' ' : c));
 }
