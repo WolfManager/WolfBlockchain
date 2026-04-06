@@ -156,6 +156,25 @@ builder.Services.Configure<RpcFailoverOptions>(options =>
 
 builder.Services.AddHttpClient<IRpcFailoverService, RpcFailoverService>();
 
+// ============= AI CHAT SERVICE =============
+// Option A: Ollama (local LLM) — active when Ollama:BaseUrl is configured
+// Option C: Mock/Stub           — active in Development or when Ollama is not configured
+var ollamaBaseUrl = builder.Configuration["Ollama:BaseUrl"];
+if (!string.IsNullOrWhiteSpace(ollamaBaseUrl))
+{
+    builder.Services.AddHttpClient<IChatService, OllamaService>(client =>
+    {
+        client.BaseAddress = new Uri(ollamaBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(builder.Configuration.GetValue<int>("Ollama:TimeoutSeconds", 60));
+    });
+    Log.Information("✅ Chat service configured: Ollama at {BaseUrl}", ollamaBaseUrl);
+}
+else
+{
+    builder.Services.AddSingleton<IChatService, MockChatService>();
+    Log.Information("ℹ️ Chat service configured: Mock (set Ollama:BaseUrl to enable local AI)");
+}
+
 builder.Services.AddSingleton<IPerformanceMetrics, WolfBlockchain.API.Monitoring.PerformanceMetrics>();
 builder.Services.AddSingleton<ISecretRotationService, SecretRotationService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ISecretRotationService>() as SecretRotationService ?? throw new InvalidOperationException());
