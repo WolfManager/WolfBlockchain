@@ -380,6 +380,44 @@ public sealed class MockChatService : IChatService
     }
 }
 
+// ============= UNAVAILABLE OLLAMA SERVICE =============
+
+/// <summary>
+/// IOllamaService stub registered when Ollama:BaseUrl is not configured.
+/// All operations return "unavailable" so ChatbotController can still start and
+/// report a meaningful status without attempting any real network calls.
+/// </summary>
+public sealed class UnavailableOllamaService : IOllamaService
+{
+    private readonly IChatSessionStore _sessionStore;
+
+    public string BackendName => "mock";
+
+    public UnavailableOllamaService(IChatSessionStore sessionStore)
+    {
+        _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
+    }
+
+    /// <inheritdoc/>
+    public Task<ChatResponse> ChatAsync(ChatRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var session = _sessionStore.GetOrCreateSession(request.SessionId, out _);
+        var reply = $"[Mock] Echo: {request.Message}";
+        _sessionStore.AppendMessage(session.SessionId, new ChatMessage { Role = "user",      Content = request.Message });
+        _sessionStore.AppendMessage(session.SessionId, new ChatMessage { Role = "assistant", Content = reply });
+        return Task.FromResult(new ChatResponse { Success = true, Reply = reply, SessionId = session.SessionId, Model = "mock" });
+    }
+
+    /// <inheritdoc/>
+    public Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(false);
+
+    /// <inheritdoc/>
+    public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+}
+
 // ============= LOG SANITIZER =============
 
 /// <summary>Helpers to sanitise user-controlled strings before logging (prevents log-injection)</summary>

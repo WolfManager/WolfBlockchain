@@ -164,24 +164,18 @@ builder.Services.AddSingleton<IChatSessionStore, InMemoryChatSessionStore>();
 
 if (!string.IsNullOrWhiteSpace(ollamaBaseUrl))
 {
-    // Option A – real Ollama backend
+    // Option A – real Ollama backend (Ollama:BaseUrl is set)
     builder.Services.AddHttpClient<IOllamaService, OllamaChatService>();
     builder.Services.AddTransient<IChatService>(sp => sp.GetRequiredService<IOllamaService>());
     Log.Information("✅ Ollama chatbot configured (backend: {BaseUrl}, model: {Model})", ollamaBaseUrl, ollamaOptions.Model);
 }
 else
 {
-    // Option C – Mock fallback (Ollama not configured)
+    // Option C – Mock/Unavailable fallback (Ollama:BaseUrl is empty)
+    // UnavailableOllamaService satisfies IOllamaService (returns unavailable) so that
+    // ChatbotController can still start and report meaningful status without real HTTP calls.
     builder.Services.AddSingleton<IOllamaService>(sp =>
-    {
-        var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
-        var client = httpFactory.CreateClient();
-        return new OllamaChatService(
-            client,
-            ollamaOptions,
-            sp.GetRequiredService<IChatSessionStore>(),
-            sp.GetRequiredService<ILogger<OllamaChatService>>());
-    });
+        new UnavailableOllamaService(sp.GetRequiredService<IChatSessionStore>()));
     builder.Services.AddSingleton<IChatService>(sp =>
         new MockChatService(sp.GetRequiredService<IChatSessionStore>()));
     Log.Information("ℹ️  Ollama:BaseUrl not set – using MockChatService. Set Ollama:BaseUrl to enable real AI responses.");
