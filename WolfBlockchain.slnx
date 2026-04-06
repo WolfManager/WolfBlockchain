@@ -1,9 +1,24 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/WolfBlockchain.API/WolfBlockchain.API.csproj" />
+    <Project Path="src/WolfBlockchain.Protocol/WolfBlockchain.Protocol.csproj" />
+    <Project Path="src/WolfBlockchain.Observability/WolfBlockchain.Observability.csproj" />
     <Project Path="src/WolfBlockchain.Core/WolfBlockchain.Core.csproj" />
-    <Project Path="src/WolfBlockchain.Node/WolfBlockchain.Node.csproj" />
     <Project Path="src/WolfBlockchain.Storage/WolfBlockchain.Storage.csproj" />
     <Project Path="src/WolfBlockchain.Wallet/WolfBlockchain.Wallet.csproj" />
+    <Project Path="src/WolfBlockchain.Consensus/WolfBlockchain.Consensus.csproj" />
+    <Project Path="src/WolfBlockchain.Networking/WolfBlockchain.Networking.csproj" />
+    <Project Path="src/WolfBlockchain.Agents/WolfBlockchain.Agents.csproj" />
+    <Project Path="src/WolfBlockchain.Api/WolfBlockchain.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Folder Name="/tests/Unit/">
+      <Project Path="tests/Unit/WolfBlockchain.Core.UnitTests/WolfBlockchain.Core.UnitTests.csproj" />
+      <Project Path="tests/Unit/WolfBlockchain.Agents.UnitTests/WolfBlockchain.Agents.UnitTests.csproj" />
+      <Project Path="tests/Unit/WolfBlockchain.Economics.UnitTests/WolfBlockchain.Economics.UnitTests.csproj" />
+    </Folder>
+    <Folder Name="/tests/Integration/">
+      <Project Path="tests/Integration/WolfBlockchain.ConsensusNetworking.IntegrationTests/WolfBlockchain.ConsensusNetworking.IntegrationTests.csproj" />
+      <Project Path="tests/Integration/WolfBlockchain.StorageApi.IntegrationTests/WolfBlockchain.StorageApi.IntegrationTests.csproj" />
+    </Folder>
   </Folder>
 </Solution>

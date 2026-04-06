@@ -5,8 +5,15 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../WolfBlockchain.Protocol/WolfBlockchain.Protocol.csproj" />
     <ProjectReference Include="../WolfBlockchain.Core/WolfBlockchain.Core.csproj" />
+    <ProjectReference Include="../WolfBlockchain.Consensus/WolfBlockchain.Consensus.csproj" />
+    <ProjectReference Include="../WolfBlockchain.Storage/WolfBlockchain.Storage.csproj" />
+    <ProjectReference Include="../WolfBlockchain.Wallet/WolfBlockchain.Wallet.csproj" />
+    <ProjectReference Include="../WolfBlockchain.Agents/WolfBlockchain.Agents.csproj" />
     <ProjectReference Include="../WolfBlockchain.Observability/WolfBlockchain.Observability.csproj" />
   </ItemGroup>
 </Project>
