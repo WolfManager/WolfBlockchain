@@ -156,6 +156,11 @@ builder.Services.Configure<RpcFailoverOptions>(options =>
 
 builder.Services.AddHttpClient<IRpcFailoverService, RpcFailoverService>();
 
+// ============= OLLAMA CHATBOT =============
+builder.Services.AddSingleton<IChatSessionStore, InMemoryChatSessionStore>();
+builder.Services.AddHttpClient<IOllamaService, OllamaService>();
+Log.Information("✅ Ollama chatbot service configured");
+
 builder.Services.AddSingleton<IPerformanceMetrics, WolfBlockchain.API.Monitoring.PerformanceMetrics>();
 builder.Services.AddSingleton<ISecretRotationService, SecretRotationService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ISecretRotationService>() as SecretRotationService ?? throw new InvalidOperationException());
