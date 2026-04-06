@@ -94,7 +94,7 @@
     protected override async Task OnInitializedAsync()
     {
         await CheckStatus();
-        _statusTimer = new System.Timers.Timer(TimeSpan.FromSeconds(15));
+        _statusTimer = new System.Timers.Timer(TimeSpan.FromSeconds(30));
         _statusTimer.Elapsed += async (_, _) =>
         {
             await CheckStatus();
@@ -200,5 +200,5 @@
     private sealed record ChatApiResponse(
         [property: System.Text.Json.Serialization.JsonPropertyName("sessionId")] string SessionId,
         [property: System.Text.Json.Serialization.JsonPropertyName("reply")] string Reply,
-        [property: System.Text.Json.Serialization.JsonPropertyName("tokensUsed")] int TokensUsed);
+        [property: System.Text.Json.Serialization.JsonPropertyName("messageCount")] int MessageCount);
 }

@@ -10,7 +10,7 @@ public sealed record ChatMessage(string Role, string Content);
 public sealed record ChatRequest(string Message, string? SessionId = null);
 
 /// <summary>Response DTO from chatbot endpoint</summary>
-public sealed record ChatResponse(string SessionId, string Reply, int TokensUsed);
+public sealed record ChatResponse(string SessionId, string Reply, int MessageCount);
 
 /// <summary>Interface for Ollama AI service</summary>
 public interface IOllamaService
@@ -115,7 +115,7 @@ public sealed class OllamaService : IOllamaService
     private readonly string _systemPrompt;
 
     private static string SanitizeForLog(string value) =>
-        string.Concat(value.Select(c => c < 0x20 || c == 0x7F ? ' ' : c));
+        string.Concat(value.Select(c => c < 0x20 || c == 0x7F || (c >= 0x80 && c <= 0x9F) ? ' ' : c));
 
     public OllamaService(
         HttpClient httpClient,

@@ -17,7 +17,7 @@ public class ChatbotController : ControllerBase
     private readonly ILogger<ChatbotController> _logger;
 
     private static string SanitizeForLog(string value) =>
-        string.Concat(value.Select(c => c < 0x20 || c == 0x7F ? ' ' : c));
+        string.Concat(value.Select(c => c < 0x20 || c == 0x7F || (c >= 0x80 && c <= 0x9F) ? ' ' : c));
 
     public ChatbotController(
         IOllamaService ollamaService,
@@ -53,9 +53,8 @@ public class ChatbotController : ControllerBase
             var reply = await _ollamaService.ChatAsync(sessionId, request.Message, cancellationToken);
 
             var historyCount = _sessionStore.GetHistory(sessionId).Count;
-            var tokensUsed = historyCount; // approximation: one unit per stored message
 
-            return Ok(new ChatResponse(sessionId, reply, tokensUsed));
+            return Ok(new ChatResponse(sessionId, reply, historyCount));
         }
         catch (InvalidOperationException ex)
         {
