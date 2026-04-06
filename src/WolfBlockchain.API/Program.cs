@@ -144,6 +144,43 @@ builder.Services.AddScoped<ClientAuthService>();
 builder.Services.AddScoped<RealtimeUpdateService>();
 builder.Services.AddScoped<AdminDashboardCacheService>();
 
+// ============= USER MANAGER SERVICE (Singleton – shared login-lockout state) =============
+builder.Services.AddSingleton<IUserManagerService, UserManagerService>();
+Log.Information("✅ UserManagerService registered as Singleton");
+
+// ============= OLLAMA / AI CHATBOT =============
+var ollamaBaseUrl = builder.Configuration["Ollama:BaseUrl"] ?? string.Empty;
+var ollamaOptions = new WolfBlockchain.API.Services.OllamaOptions
+{
+    BaseUrl        = string.IsNullOrWhiteSpace(ollamaBaseUrl) ? "http://localhost:11434" : ollamaBaseUrl,
+    Model          = builder.Configuration["Ollama:Model"] ?? "llama3",
+    TimeoutSeconds = builder.Configuration.GetValue<int>("Ollama:TimeoutSeconds", 120),
+    SystemPrompt   = builder.Configuration["Ollama:SystemPrompt"]
+                     ?? "You are WolfBot, an AI assistant for the WolfBlockchain platform."
+};
+
+builder.Services.AddSingleton(ollamaOptions);
+builder.Services.AddSingleton<IChatSessionStore, InMemoryChatSessionStore>();
+
+if (!string.IsNullOrWhiteSpace(ollamaBaseUrl))
+{
+    // Option A – real Ollama backend (Ollama:BaseUrl is set)
+    builder.Services.AddHttpClient<IOllamaService, OllamaChatService>();
+    builder.Services.AddTransient<IChatService>(sp => sp.GetRequiredService<IOllamaService>());
+    Log.Information("✅ Ollama chatbot configured (backend: {BaseUrl}, model: {Model})", ollamaBaseUrl, ollamaOptions.Model);
+}
+else
+{
+    // Option C – Mock/Unavailable fallback (Ollama:BaseUrl is empty)
+    // UnavailableOllamaService satisfies IOllamaService (returns unavailable) so that
+    // ChatbotController can still start and report meaningful status without real HTTP calls.
+    builder.Services.AddSingleton<IOllamaService>(sp =>
+        new UnavailableOllamaService(sp.GetRequiredService<IChatSessionStore>()));
+    builder.Services.AddSingleton<IChatService>(sp =>
+        new MockChatService(sp.GetRequiredService<IChatSessionStore>()));
+    Log.Information("ℹ️  Ollama:BaseUrl not set – using MockChatService. Set Ollama:BaseUrl to enable real AI responses.");
+}
+
 builder.Services.Configure<RpcFailoverOptions>(options =>
 {
     options.PrimaryEndpoint = builder.Configuration["RPC_PRIMARY"] ?? builder.Configuration["Blockchain:RpcPrimary"];
