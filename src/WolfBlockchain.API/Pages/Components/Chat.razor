@@ -101,9 +101,13 @@
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-                var reply = json.TryGetProperty("reply", out var r) ? r.GetString() ?? string.Empty
-                          : json.TryGetProperty("response", out var resp) ? resp.GetString() ?? string.Empty
-                          : "(no response)";
+                string reply;
+                if (json.TryGetProperty("reply", out var replyProp))
+                    reply = replyProp.GetString() ?? string.Empty;
+                else if (json.TryGetProperty("response", out var responseProp))
+                    reply = responseProp.GetString() ?? string.Empty;
+                else
+                    reply = "(no response)";
                 messages.Add(new ChatMessage(reply, IsUser: false, DateTime.Now));
             }
             else
@@ -142,9 +146,9 @@
         {
             await JS.InvokeVoidAsync("wolfChat.scrollToBottom", messagesContainer);
         }
-        catch (JSException)
+        catch (Exception)
         {
-            // JS interop may not be available during prerender
+            // JS interop may fail during prerender, circuit disconnection, or component disposal
         }
     }
 }
