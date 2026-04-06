@@ -250,7 +250,7 @@ if ($RestoreKubernetes) {
     Write-Step "Step 6: Kubernetes rollback to $StableImageTag"
 
     # Ensure the deployment exists
-    $DepJson = kubectl get deployment $DeploymentName -n $Namespace -o json 2>&1
+    $null = kubectl get deployment $DeploymentName -n $Namespace -o json 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Warn "Deployment '$DeploymentName' not found in namespace '$Namespace'. Skipping K8s rollback."
         $K8sStatus = "SKIPPED (deployment not found)"
@@ -285,10 +285,15 @@ if ($RestoreKubernetes) {
         else {
             Write-Ok "Rollout healthy: Ready=$Ready Updated=$Updated Desired=$Replicas"
 
+function Get-HttpCode {
+    param([string]$Path)
+    curl.exe -s -o $null -w "%{http_code}" -H "Host: $IngressHost" "http://localhost$Path"
+}
+
             Write-Info "Endpoint smoke-checks via ingress host '$IngressHost'"
-            $HealthCode  = curl.exe -s -o $null -w "%{http_code}" -H "Host: $IngressHost" "http://localhost/health"
-            $ReadyCode   = curl.exe -s -o $null -w "%{http_code}" -H "Host: $IngressHost" "http://localhost/ready"
-            $MetricsCode = curl.exe -s -o $null -w "%{http_code}" -H "Host: $IngressHost" "http://localhost/metrics"
+            $HealthCode  = Get-HttpCode "/health"
+            $ReadyCode   = Get-HttpCode "/ready"
+            $MetricsCode = Get-HttpCode "/metrics"
 
             Write-Info "  /health  → $HealthCode"
             Write-Info "  /ready   → $ReadyCode"
@@ -335,7 +340,7 @@ if (-not $DryRun) {
     $Report = @"
 # Restore Report - WolfBlockchain Stable State 2026-03-24
 
-**Generated**: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC")
+**Generated**: $((Get-Date).ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss")) UTC
 **Script**: scripts/restore-stable-20260324.ps1
 
 ## Parameters
