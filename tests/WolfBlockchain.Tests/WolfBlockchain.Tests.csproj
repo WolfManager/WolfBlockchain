@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\WolfBlockchain.Core\WolfBlockchain.Core.csproj" />
     <ProjectReference Include="..\..\src\WolfBlockchain.API\WolfBlockchain.API.csproj" />
     <ProjectReference Include="..\..\src\WolfBlockchain.Storage\WolfBlockchain.Storage.csproj" />
+    <ProjectReference Include="..\..\src\WolfBlockchain.Agents\WolfBlockchain.Agents.csproj" />
   </ItemGroup>
 
 </Project>

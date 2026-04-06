@@ -28,6 +28,7 @@
     <ProjectReference Include="..\WolfBlockchain.Core\WolfBlockchain.Core.csproj" />
     <ProjectReference Include="..\WolfBlockchain.Wallet\WolfBlockchain.Wallet.csproj" />
     <ProjectReference Include="..\WolfBlockchain.Storage\WolfBlockchain.Storage.csproj" />
+    <ProjectReference Include="..\WolfBlockchain.Agents\WolfBlockchain.Agents.csproj" />
   </ItemGroup>
 
 </Project>
