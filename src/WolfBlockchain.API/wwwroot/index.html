@@ -29,6 +29,14 @@
             setToken: (value) => localStorage.setItem("wolf_access_token", value),
             clearToken: () => localStorage.removeItem("wolf_access_token")
         };
+
+        window.wolfChat = {
+            scrollToBottom: (element) => {
+                if (element) {
+                    element.scrollTop = element.scrollHeight;
+                }
+            }
+        };
     </script>
     <script src="_framework/blazor.web.js"></script>
 </body>

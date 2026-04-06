@@ -84,6 +84,12 @@
                 ⛓️ Blockchain
             </button>
         </li>
+        <li class="nav-item">
+            <button class="nav-link @(activeTab == "chat" ? "active" : "")" 
+               @onclick="() => SetTab("chat")" role="tab">
+                💬 Chat
+            </button>
+        </li>
     </ul>
 
     <!-- Tab Content -->
@@ -111,6 +117,10 @@
         @if (activeTab == "blockchain")
         {
             <BlockchainTab />
+        }
+        @if (activeTab == "chat")
+        {
+            <ChatTab />
         }
     </div>
 </div>
