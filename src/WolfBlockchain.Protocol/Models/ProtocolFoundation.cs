@@ -1,4 +1,6 @@
-namespace WolfBlockchain.Protocol.Abstractions;
+using WolfBlockchain.Protocol.Abstractions;
+
+namespace WolfBlockchain.Protocol.Models;
 
 public static class ProtocolVersions
 {
