@@ -1,0 +1,188 @@
+@using Microsoft.AspNetCore.Components.Web
+@using System.Net.Http.Headers
+@using System.Text.Json
+@implements IDisposable
+
+<!-- Floating Chat Button -->
+<div class="wolfbot-widget-container">
+    @if (!isOpen)
+    {
+        <button class="wolfbot-toggle-btn btn btn-primary rounded-circle shadow"
+                @onclick="ToggleWidget"
+                title="Open WolfBot Chat">
+            🤖
+        </button>
+    }
+
+    @if (isOpen)
+    {
+        <div class="wolfbot-panel card shadow-lg">
+            <!-- Header -->
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
+                <span class="fw-bold">🤖 WolfBot</span>
+                <div>
+                    <button class="btn btn-sm btn-outline-light me-1" @onclick="ClearSession" title="Clear chat">🗑️</button>
+                    <button class="btn btn-sm btn-outline-light" @onclick="ToggleWidget" title="Close">✕</button>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div class="card-body p-2 overflow-auto" style="height: 280px;" id="wolfbot-messages">
+                @if (messages.Count == 0)
+                {
+                    <p class="text-muted small fst-italic mt-2">Hi! I'm WolfBot 🐺. How can I help?</p>
+                }
+                else
+                {
+                    @foreach (var msg in messages)
+                    {
+                        <div class="d-flex @(msg.Role == "user" ? "justify-content-end" : "justify-content-start") mb-1">
+                            <div class="px-2 py-1 rounded small
+                                        @(msg.Role == "user" ? "bg-primary text-white" : "bg-light text-dark")"
+                                 style="max-width: 80%; white-space: pre-wrap; word-break: break-word;">
+                                @msg.Content
+                            </div>
+                        </div>
+                    }
+                }
+                @if (isLoading)
+                {
+                    <div class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Thinking…</div>
+                }
+            </div>
+
+            <!-- Error -->
+            @if (!string.IsNullOrWhiteSpace(errorText))
+            {
+                <div class="px-2 py-1">
+                    <small class="text-warning">⚠️ @errorText</small>
+                </div>
+            }
+
+            <!-- Input -->
+            <div class="card-footer p-2">
+                <div class="input-group input-group-sm">
+                    <input type="text"
+                           class="form-control"
+                           placeholder="Ask something…"
+                           @bind="inputText"
+                           @bind:event="oninput"
+                           @onkeydown="OnKeyDown"
+                           disabled="@isLoading" />
+                    <button class="btn btn-primary"
+                            @onclick="SendMessage"
+                            disabled="@(isLoading || string.IsNullOrWhiteSpace(inputText))">
+                        ➤
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Injected HttpClient used to call the chatbot API</summary>
+    [Parameter] public HttpClient? HttpClient { get; set; }
+
+    /// <summary>Bearer token for authenticated requests</summary>
+    [Parameter] public string? AuthToken { get; set; }
+
+    private List<WidgetMessage> messages = new();
+    private string inputText = string.Empty;
+    private string? sessionId;
+    private bool isOpen;
+    private bool isLoading;
+    private string? errorText;
+
+    private record WidgetMessage(string Role, string Content);
+
+    private HttpClient? ResolvedClient => HttpClient;
+
+    private void ToggleWidget() => isOpen = !isOpen;
+
+    private async Task SendMessage()
+    {
+        var text = inputText.Trim();
+        if (string.IsNullOrWhiteSpace(text) || ResolvedClient is null) return;
+
+        messages.Add(new WidgetMessage("user", text));
+        inputText = string.Empty;
+        isLoading = true;
+        errorText = null;
+        StateHasChanged();
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(AuthToken))
+                ResolvedClient.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", AuthToken);
+
+            var payload = new { message = text, sessionId };
+            var response = await ResolvedClient.PostAsJsonAsync("api/chatbot/chat", payload);
+            var json = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                using var doc = JsonDocument.Parse(json);
+                var reply = doc.RootElement.TryGetProperty("reply",     out var r) ? r.GetString() ?? "" : "";
+                sessionId = doc.RootElement.TryGetProperty("sessionId", out var s) ? s.GetString() : sessionId;
+                messages.Add(new WidgetMessage("assistant", reply));
+            }
+            else
+            {
+                using var doc = JsonDocument.Parse(json);
+                errorText = doc.RootElement.TryGetProperty("error", out var e) ? e.GetString() : "Error";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorText = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ClearSession()
+    {
+        if (ResolvedClient != null && !string.IsNullOrWhiteSpace(sessionId))
+        {
+            try { await ResolvedClient.DeleteAsync($"api/chatbot/sessions/{sessionId}"); } catch { /* best effort */ }
+        }
+        messages.Clear();
+        sessionId = null;
+        errorText = null;
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey && !isLoading && !string.IsNullOrWhiteSpace(inputText))
+            await SendMessage();
+    }
+
+    public void Dispose() { }
+}
+
+<style>
+    .wolfbot-widget-container {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 1050;
+    }
+
+    .wolfbot-toggle-btn {
+        width: 56px;
+        height: 56px;
+        font-size: 1.5rem;
+        line-height: 1;
+    }
+
+    .wolfbot-panel {
+        width: 340px;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+</style>
