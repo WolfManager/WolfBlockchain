@@ -156,6 +156,12 @@ builder.Services.Configure<RpcFailoverOptions>(options =>
 
 builder.Services.AddHttpClient<IRpcFailoverService, RpcFailoverService>();
 
+// ============= OLLAMA (Local AI Provider) =============
+builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection("Ollama"));
+builder.Services.AddHttpClient<IOllamaService, OllamaService>();
+Log.Information("✅ Ollama local AI provider configured (base URL: {BaseUrl})",
+    builder.Configuration["Ollama:BaseUrl"] ?? "http://localhost:11434");
+
 builder.Services.AddSingleton<IPerformanceMetrics, WolfBlockchain.API.Monitoring.PerformanceMetrics>();
 builder.Services.AddSingleton<ISecretRotationService, SecretRotationService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ISecretRotationService>() as SecretRotationService ?? throw new InvalidOperationException());
