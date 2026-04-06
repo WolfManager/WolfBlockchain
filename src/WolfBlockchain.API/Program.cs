@@ -144,6 +144,20 @@ builder.Services.AddScoped<ClientAuthService>();
 builder.Services.AddScoped<RealtimeUpdateService>();
 builder.Services.AddScoped<AdminDashboardCacheService>();
 
+// Week 8 Task 1: Advanced Query Caching
+builder.Services.AddScoped<IQueryCacheService, QueryCacheService>();
+
+// Week 8 Task 2: Smart Contract Optimization
+builder.Services.AddScoped<IContractCacheService, ContractCacheService>();
+builder.Services.AddScoped<IBatchContractExecutor, BatchContractExecutor>();
+
+// Week 8 Task 3: Analytics Dashboard
+builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
+
+// Week 8 Task 4: AI Model Management
+builder.Services.AddSingleton<IAIModelService, AIModelService>();
+builder.Services.AddSingleton<IModelVersionService, ModelVersionService>();
+
 builder.Services.Configure<RpcFailoverOptions>(options =>
 {
     options.PrimaryEndpoint = builder.Configuration["RPC_PRIMARY"] ?? builder.Configuration["Blockchain:RpcPrimary"];
