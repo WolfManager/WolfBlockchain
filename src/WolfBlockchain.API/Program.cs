@@ -14,6 +14,14 @@ using WolfBlockchain.API.Monitoring;
 using WolfBlockchain.Core;
 using WolfBlockchain.Storage.Context;
 using WolfBlockchain.Storage.Repositories;
+using WolfBlockchain.Agents.Abstractions;
+using WolfBlockchain.Agents.Gateway;
+using WolfBlockchain.Agents.Logging;
+using WolfBlockchain.Agents.Memory;
+using WolfBlockchain.Agents.Orchestration;
+using WolfBlockchain.Agents.Policies;
+using WolfBlockchain.Agents.Providers;
+using WolfBlockchain.Agents.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -159,6 +167,16 @@ builder.Services.AddHttpClient<IRpcFailoverService, RpcFailoverService>();
 builder.Services.AddSingleton<IPerformanceMetrics, WolfBlockchain.API.Monitoring.PerformanceMetrics>();
 builder.Services.AddSingleton<ISecretRotationService, SecretRotationService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ISecretRotationService>() as SecretRotationService ?? throw new InvalidOperationException());
+
+// ============= COPILOT CODING AGENT (independent of Ollama) =============
+builder.Services.AddSingleton<IAuditLogger, StructuredAuditLogger>();
+builder.Services.AddSingleton<IAgentPolicyEngine, DefaultAgentPolicyEngine>();
+builder.Services.AddSingleton<IAgentActionGateway, SafeAgentActionGateway>();
+builder.Services.AddSingleton<IAgentOrchestrator, SafeAgentOrchestrator>();
+builder.Services.AddSingleton<InMemoryAgentMemoryStore>();
+builder.Services.AddSingleton<IProviderAdapter, CopilotProviderAdapter>();
+builder.Services.AddSingleton<ICodingAgentService, CopilotCodingAgentService>();
+Log.Information("✅ Copilot Coding Agent registered (independent of Ollama)");
 
 // ============= SIGNALR (Real-time Updates) =============
 builder.Services.AddSignalR();

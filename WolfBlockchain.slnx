@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/WolfBlockchain.API/WolfBlockchain.API.csproj" />
+    <Project Path="src/WolfBlockchain.Agents/WolfBlockchain.Agents.csproj" />
     <Project Path="src/WolfBlockchain.Core/WolfBlockchain.Core.csproj" />
     <Project Path="src/WolfBlockchain.Node/WolfBlockchain.Node.csproj" />
     <Project Path="src/WolfBlockchain.Storage/WolfBlockchain.Storage.csproj" />
