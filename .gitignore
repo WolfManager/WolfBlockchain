@@ -165,3 +165,10 @@ kubeconfig-*.yaml
 
 # Sensitive files from K8s
 secret-backup-*.yaml
+
+# Runtime blockchain data directory (populated at runtime by BlockchainStorage)
+/data/
+
+# Auto-generated backup snapshots created by scripts/backup.sh and scripts/restore.sh
+/backups/backup-*/
+/backups/pre-restore-*/
