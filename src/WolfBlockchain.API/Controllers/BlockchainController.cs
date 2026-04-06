@@ -90,6 +90,33 @@ public class BlockchainController : ControllerBase
         }
     }
 
+    [HttpGet("history")]
+    public IActionResult GetHistory([FromQuery] int skip = 0, [FromQuery] int take = 50)
+    {
+        if (skip < 0) skip = 0;
+        if (take < 1 || take > 200) take = 50;
+
+        var entries = _blockchain.GetHistory(skip, take);
+        return Ok(new
+        {
+            TotalBlocks = _blockchain.Chain.Count,
+            Skip = skip,
+            Take = take,
+            History = entries
+        });
+    }
+
+    [HttpGet("history/{index}")]
+    public IActionResult GetHistoryEntry(int index)
+    {
+        if (index < 0 || index >= _blockchain.Chain.Count)
+        {
+            return NotFound("Block not found");
+        }
+
+        return Ok(_blockchain.Chain[index].ToHistoryEntry());
+    }
+
     [HttpPost("save")]
     public IActionResult SaveBlockchain()
     {

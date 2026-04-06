@@ -97,4 +97,22 @@ public class Blockchain
         }
         return true;
     }
+
+    public List<BlockHistoryEntry> GetHistory(int skip = 0, int take = 50)
+    {
+        return Chain
+            .Skip(skip)
+            .Take(take)
+            .Select(b => b.ToHistoryEntry())
+            .ToList();
+    }
 }
+
+public record BlockHistoryEntry(
+    int Index,
+    string Hash,
+    string PreviousHash,
+    DateTime Timestamp,
+    int TransactionCount,
+    int Nonce,
+    string Validator);

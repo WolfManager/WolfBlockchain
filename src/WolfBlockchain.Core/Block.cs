@@ -43,4 +43,7 @@ public class Block
         }
         Console.WriteLine($"Block mined: {Hash}");
     }
+
+    public BlockHistoryEntry ToHistoryEntry() =>
+        new(Index, Hash, PreviousHash, Timestamp, Transactions.Count, Nonce, Validator);
 }
