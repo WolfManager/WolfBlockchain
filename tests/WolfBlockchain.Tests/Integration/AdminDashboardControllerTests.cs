@@ -1,204 +1,142 @@
-using System.Net;
+using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
+using Moq;
 using Xunit;
 using WolfBlockchain.API.Controllers;
+using WolfBlockchain.API.Services;
+using WolfBlockchain.Storage.Repositories;
 
 namespace WolfBlockchain.Tests.Integration;
 
 /// <summary>
-/// Integration tests for AdminDashboardController.
-/// NOTE: These tests require running API instance.
-/// Use [Trait("Category", "Integration")] to skip in CI/CD if API not available.
+/// Unit tests for AdminDashboardController that test controller logic directly
+/// without requiring a running API instance.
 /// </summary>
-[Trait("Category", "Integration")]
-public class AdminDashboardControllerTests : IAsyncLifetime
+public class AdminDashboardControllerTests
 {
-    private readonly HttpClient _httpClient;
-    private readonly string _apiBaseUrl = "http://localhost:5000";
-    private string? _testAuthToken;
+    private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly AdminDashboardCacheService _cacheService;
+    private readonly AdminDashboardController _controller;
 
     public AdminDashboardControllerTests()
     {
-        _httpClient = new HttpClient();
-    }
+        _unitOfWorkMock = new Mock<IUnitOfWork>();
 
-    public async Task InitializeAsync()
-    {
-        // Wait for API to be ready
-        await WaitForApiReadinessAsync();
-        
-        // Get auth token (mock for testing)
-        _testAuthToken = GenerateMockJwtToken();
-    }
+        var memoryCache = new MemoryCache(new MemoryCacheOptions());
+        var cacheLogger = LoggerFactory.Create(b => b.AddConsole())
+            .CreateLogger<AdminDashboardCacheService>();
+        _cacheService = new AdminDashboardCacheService(memoryCache, cacheLogger);
 
-    public async Task DisposeAsync()
-    {
-        _httpClient.Dispose();
-        await Task.CompletedTask;
+        var controllerLogger = LoggerFactory.Create(b => b.AddConsole())
+            .CreateLogger<AdminDashboardController>();
+        _controller = new AdminDashboardController(_unitOfWorkMock.Object, _cacheService, controllerLogger);
     }
 
     [Fact]
     public async Task GetSummary_ShouldReturnOkWithValidData()
     {
-        // Arrange
-        var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/api/admindashboard/summary");
-        request.Headers.Add("Authorization", $"Bearer {_testAuthToken}");
-
         // Act
-        var response = await _httpClient.SendAsync(request);
+        var result = await _controller.GetSummaryAsync();
 
         // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("TotalUsers", content);
-        Assert.Contains("TotalTokens", content);
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(okResult.Value);
+        Assert.Contains("TotalUsers", json);
+        Assert.Contains("TotalTokens", json);
     }
 
     [Fact]
     public async Task GetUsers_ShouldReturnPaginatedResults()
     {
-        // Arrange
-        var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/api/admindashboard/users?page=1&pageSize=10");
-        request.Headers.Add("Authorization", $"Bearer {_testAuthToken}");
-
         // Act
-        var response = await _httpClient.SendAsync(request);
+        var result = await _controller.GetUsersAsync(page: 1, pageSize: 10);
 
         // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Users", content);
-        Assert.Contains("TotalCount", content);
-        Assert.Contains("Page", content);
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(okResult.Value);
+        Assert.Contains("Users", json);
+        Assert.Contains("TotalCount", json);
+        Assert.Contains("Page", json);
     }
 
     [Fact]
     public async Task GetTokens_ShouldReturnPaginatedResults()
     {
-        // Arrange
-        var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/api/admindashboard/tokens?page=1&pageSize=10");
-        request.Headers.Add("Authorization", $"Bearer {_testAuthToken}");
-
         // Act
-        var response = await _httpClient.SendAsync(request);
+        var result = await _controller.GetTokensAsync(page: 1, pageSize: 10);
 
         // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Tokens", content);
-        Assert.Contains("TokenId", content);
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(okResult.Value);
+        Assert.Contains("Tokens", json);
+        Assert.Contains("TokenId", json);
     }
 
     [Fact]
-    public async Task GetRecentEvents_ShouldReturnEventsList()
+    public void GetRecentEvents_ShouldReturnEventsList()
     {
-        // Arrange
-        var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/api/admindashboard/recent-events?limit=10");
-        request.Headers.Add("Authorization", $"Bearer {_testAuthToken}");
-
         // Act
-        var response = await _httpClient.SendAsync(request);
+        var result = _controller.GetRecentEvents(limit: 10);
 
         // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsType<OkObjectResult>(result);
     }
 
     [Fact]
-    public async Task Endpoints_WithoutAuthToken_ShouldReturn401Unauthorized()
+    public void Endpoints_ShouldRequireAuthentication()
     {
-        // Arrange
-        var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/api/admindashboard/summary");
-        // Intentionally no auth header
-
-        // Act
-        var response = await _httpClient.SendAsync(request);
-
-        // Assert
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // Verify that the controller class is decorated with [Authorize]
+        var authorizeAttr = typeof(AdminDashboardController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true);
+        Assert.NotEmpty(authorizeAttr);
     }
 
     [Fact]
     public async Task GetUsers_WithInvalidPage_ShouldReturnBadRequest()
     {
-        // Arrange
-        var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/api/admindashboard/users?page=0&pageSize=10");
-        request.Headers.Add("Authorization", $"Bearer {_testAuthToken}");
-
         // Act
-        var response = await _httpClient.SendAsync(request);
+        var result = await _controller.GetUsersAsync(page: 0, pageSize: 10);
 
         // Assert
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
     [Fact]
     public async Task ConcurrentRequests_ShouldHandleMultipleClients()
     {
         // Arrange
-        var tasks = new List<Task<HttpResponseMessage>>();
-        
-        for (int i = 0; i < 10; i++)
-        {
-            var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/api/admindashboard/summary");
-            request.Headers.Add("Authorization", $"Bearer {_testAuthToken}");
-            tasks.Add(_httpClient.SendAsync(request));
-        }
+        var tasks = Enumerable.Range(0, 10)
+            .Select(_ => _controller.GetSummaryAsync());
 
         // Act
         var results = await Task.WhenAll(tasks);
 
         // Assert
-        Assert.All(results, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
+        Assert.All(results, r => Assert.IsType<OkObjectResult>(r));
     }
 
     [Fact]
     public async Task CachedEndpoint_ShouldReturnFastResponse()
     {
-        // Arrange
-        var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/api/admindashboard/summary");
-        request.Headers.Add("Authorization", $"Bearer {_testAuthToken}");
-        
+        // Act - First request (populates cache)
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-
-        // Act - First request (populate cache)
-        var response1 = await _httpClient.SendAsync(request);
+        var result1 = await _controller.GetSummaryAsync();
         stopwatch.Stop();
         var firstRequestTime = stopwatch.ElapsedMilliseconds;
 
-        // Second request should be faster (from cache)
+        // Second request should be served from cache and therefore faster
         stopwatch.Restart();
-        var response2 = await _httpClient.SendAsync(request);
+        var result2 = await _controller.GetSummaryAsync();
         stopwatch.Stop();
         var secondRequestTime = stopwatch.ElapsedMilliseconds;
 
-        // Assert
-        Assert.Equal(HttpStatusCode.OK, response1.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, response2.StatusCode);
-        Assert.True(secondRequestTime < firstRequestTime * 2, 
-            $"Cached request ({secondRequestTime}ms) should be faster than first request ({firstRequestTime}ms)");
-    }
-
-    private async Task WaitForApiReadinessAsync(int maxAttempts = 30)
-    {
-        for (int i = 0; i < maxAttempts; i++)
-        {
-            try
-            {
-                var response = await _httpClient.GetAsync($"{_apiBaseUrl}/health");
-                if (response.StatusCode == HttpStatusCode.OK)
-                    return;
-            }
-            catch { }
-
-            await Task.Delay(1000);
-        }
-
-        throw new InvalidOperationException("API did not become ready in time");
-    }
-
-    private string GenerateMockJwtToken()
-    {
-        // In production, use proper JWT generation
-        // This is a placeholder for testing
-        return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImF1ZCI6IndvbGYtYmxvY2tjaGFpbiIsImlzcyI6IndvbGYtYmxvY2tjaGFpbi1hcGkifQ.placeholder";
+        // Assert both return OK
+        Assert.IsType<OkObjectResult>(result1);
+        Assert.IsType<OkObjectResult>(result2);
+        // Cached response must be strictly faster (or equal for sub-ms runs)
+        Assert.True(secondRequestTime <= firstRequestTime,
+            $"Cached request ({secondRequestTime}ms) should be faster than or equal to first request ({firstRequestTime}ms)");
     }
 }
