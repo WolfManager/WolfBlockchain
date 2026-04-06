@@ -1,0 +1,204 @@
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ClientAuthService AuthService
+@inject NavigationManager Navigation
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">🤖 WolfBot — AI Assistant</h5>
+        <span class="badge @(ollamaOnline ? "bg-success" : "bg-secondary")">
+            @(ollamaOnline ? "🟢 Online" : "⚫ Offline")
+        </span>
+    </div>
+
+    <div class="card-body p-0">
+        <!-- Message history -->
+        <div class="chat-messages p-3" id="chat-messages" style="height:400px;overflow-y:auto;background:#f8f9fa;">
+            @foreach (var msg in messages)
+            {
+                <div class="d-flex @(msg.Role == "user" ? "justify-content-end" : "justify-content-start") mb-2">
+                    <div class="p-2 rounded @(msg.Role == "user" ? "bg-primary text-white" : "bg-white border")"
+                         style="max-width:75%;word-break:break-word;">
+                        @if (msg.Role == "assistant")
+                        {
+                            <small class="text-muted d-block mb-1">🤖 WolfBot</small>
+                        }
+                        @msg.Content
+                    </div>
+                </div>
+            }
+            @if (isThinking)
+            {
+                <div class="d-flex justify-content-start mb-2">
+                    <div class="p-2 rounded bg-white border">
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        <small class="text-muted">Thinking…</small>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card-footer">
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-warning alert-dismissible py-1 mb-2" role="alert">
+                @errorMessage
+                <button type="button" class="btn-close btn-sm" @onclick="() => errorMessage = null"></button>
+            </div>
+        }
+
+        <div class="input-group">
+            <input type="text"
+                   class="form-control"
+                   placeholder="Ask WolfBot anything about Wolf Blockchain…"
+                   @bind="inputMessage"
+                   @bind:event="oninput"
+                   @onkeydown="HandleKeyDown"
+                   disabled="@(isThinking || !ollamaOnline)" />
+            <button class="btn btn-primary"
+                    @onclick="SendMessage"
+                    disabled="@(isThinking || string.IsNullOrWhiteSpace(inputMessage) || !ollamaOnline)">
+                @if (isThinking)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                }
+                else
+                {
+                    <span>Send ➤</span>
+                }
+            </button>
+            <button class="btn btn-outline-secondary" title="New Session" @onclick="NewSession" disabled="@isThinking">
+                🗑️
+            </button>
+        </div>
+        @if (!ollamaOnline)
+        {
+            <small class="text-muted mt-1 d-block">Ollama is offline. Start Ollama locally to enable the chatbot.</small>
+        }
+    </div>
+</div>
+
+@code {
+    private record DisplayMessage(string Role, string Content);
+
+    private List<DisplayMessage> messages = new();
+    private string? sessionId;
+    private string inputMessage = string.Empty;
+    private bool isThinking;
+    private string? errorMessage;
+    private bool ollamaOnline;
+    private System.Timers.Timer? _statusTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckStatus();
+        _statusTimer = new System.Timers.Timer(TimeSpan.FromSeconds(15));
+        _statusTimer.Elapsed += async (_, _) =>
+        {
+            await CheckStatus();
+            await InvokeAsync(StateHasChanged);
+        };
+        _statusTimer.AutoReset = true;
+        _statusTimer.Start();
+    }
+
+    private async Task CheckStatus()
+    {
+        try
+        {
+            var token = await AuthService.GetValidTokenAsync();
+            if (!string.IsNullOrWhiteSpace(token))
+                Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var resp = await Http.GetFromJsonAsync<StatusResponse>("/api/chatbot/status");
+            ollamaOnline = resp?.OllamaAvailable ?? false;
+        }
+        catch
+        {
+            ollamaOnline = false;
+        }
+    }
+
+    private async Task HandleKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey && !isThinking && !string.IsNullOrWhiteSpace(inputMessage))
+            await SendMessage();
+    }
+
+    private async Task SendMessage()
+    {
+        var text = inputMessage.Trim();
+        if (string.IsNullOrEmpty(text)) return;
+
+        messages.Add(new DisplayMessage("user", text));
+        inputMessage = string.Empty;
+        isThinking = true;
+        errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var token = await AuthService.GetValidTokenAsync();
+            if (!string.IsNullOrWhiteSpace(token))
+                Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var request = new { Message = text, SessionId = sessionId };
+            var response = await Http.PostAsJsonAsync("/api/chatbot/chat", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<ChatApiResponse>();
+                if (result != null)
+                {
+                    sessionId = result.SessionId;
+                    messages.Add(new DisplayMessage("assistant", result.Reply));
+                }
+            }
+            else if ((int)response.StatusCode == 503)
+            {
+                errorMessage = "Ollama is unavailable. Please ensure Ollama is running locally.";
+                ollamaOnline = false;
+            }
+            else
+            {
+                errorMessage = $"Error {(int)response.StatusCode}: {response.ReasonPhrase}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Request failed: {ex.Message}";
+        }
+        finally
+        {
+            isThinking = false;
+        }
+    }
+
+    private async Task NewSession()
+    {
+        if (!string.IsNullOrEmpty(sessionId))
+        {
+            try
+            {
+                var token = await AuthService.GetValidTokenAsync();
+                if (!string.IsNullOrWhiteSpace(token))
+                    Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                await Http.DeleteAsync($"/api/chatbot/sessions/{sessionId}");
+            }
+            catch { /* best-effort */ }
+        }
+        sessionId = null;
+        messages.Clear();
+        errorMessage = null;
+    }
+
+    public void Dispose() => _statusTimer?.Dispose();
+
+    private sealed record StatusResponse(
+        [property: System.Text.Json.Serialization.JsonPropertyName("ollamaAvailable")] bool OllamaAvailable);
+
+    private sealed record ChatApiResponse(
+        [property: System.Text.Json.Serialization.JsonPropertyName("sessionId")] string SessionId,
+        [property: System.Text.Json.Serialization.JsonPropertyName("reply")] string Reply,
+        [property: System.Text.Json.Serialization.JsonPropertyName("tokensUsed")] int TokensUsed);
+}
