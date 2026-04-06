@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using System.Text;
@@ -158,7 +159,12 @@ builder.Services.AddHttpClient<IRpcFailoverService, RpcFailoverService>();
 
 // ============= OLLAMA (Local AI Provider) =============
 builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection("Ollama"));
-builder.Services.AddHttpClient<IOllamaService, OllamaService>();
+builder.Services.AddHttpClient<IOllamaService, OllamaService>((serviceProvider, client) =>
+{
+    var options = serviceProvider.GetRequiredService<IOptions<OllamaOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds));
+});
 Log.Information("✅ Ollama local AI provider configured (base URL: {BaseUrl})",
     builder.Configuration["Ollama:BaseUrl"] ?? "http://localhost:11434");
 

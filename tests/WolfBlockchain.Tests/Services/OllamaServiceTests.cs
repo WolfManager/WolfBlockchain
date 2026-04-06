@@ -18,15 +18,20 @@ public class OllamaServiceTests
         string defaultModel = "llama3",
         int timeoutSeconds = 30)
     {
-        var client = new HttpClient(handler);
-        var options = Options.Create(new OllamaOptions
+        var options = new OllamaOptions
         {
             BaseUrl = baseUrl,
             DefaultModel = defaultModel,
             TimeoutSeconds = timeoutSeconds
-        });
+        };
+        // Simulate what Program.cs AddHttpClient configuration does at registration time.
+        var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/"),
+            Timeout = TimeSpan.FromSeconds(Math.Max(1, options.TimeoutSeconds))
+        };
         var logger = Mock.Of<ILogger<OllamaService>>();
-        return new OllamaService(client, options, logger);
+        return new OllamaService(client, Options.Create(options), logger);
     }
 
     private static HttpMessageHandler CreateHandler(HttpStatusCode statusCode, string jsonBody)

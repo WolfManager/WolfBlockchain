@@ -150,9 +150,6 @@ public sealed class OllamaService : IOllamaService
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-        _httpClient.BaseAddress = new Uri(_options.BaseUrl.TrimEnd('/') + "/");
-        _httpClient.Timeout = TimeSpan.FromSeconds(Math.Max(1, _options.TimeoutSeconds));
     }
 
     /// <inheritdoc/>
@@ -161,7 +158,7 @@ public sealed class OllamaService : IOllamaService
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
         var effectiveModel = ResolveModel(model);
-        _logger.LogInformation("Ollama generate: model={Model}, promptLength={Length}", effectiveModel, prompt.Length);
+        _logger.LogInformation("Ollama generate: model={Model}, promptLength={Length}", SanitizeForLog(effectiveModel), prompt.Length);
 
         var request = new OllamaGenerateRequest
         {
@@ -191,7 +188,7 @@ public sealed class OllamaService : IOllamaService
             throw new ArgumentException("At least one message is required.", nameof(messages));
 
         var effectiveModel = ResolveModel(model);
-        _logger.LogInformation("Ollama chat: model={Model}, messages={Count}", effectiveModel, messages.Count);
+        _logger.LogInformation("Ollama chat: model={Model}, messages={Count}", SanitizeForLog(effectiveModel), messages.Count);
 
         var request = new OllamaChatRequest
         {
@@ -251,4 +248,8 @@ public sealed class OllamaService : IOllamaService
 
     private string ResolveModel(string? model) =>
         !string.IsNullOrWhiteSpace(model) ? model : _options.DefaultModel;
+
+    /// <summary>Strips control characters and newlines to prevent log-injection attacks.</summary>
+    private static string SanitizeForLog(string value) =>
+        value.Replace('\n', ' ').Replace('\r', ' ').Replace('\t', ' ');
 }
